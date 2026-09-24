@@ -126,6 +126,16 @@ class WazenApi {
     return DailyState.fromJson(Map<String, dynamic>.from(data['daily_state']));
   }
 
+
+
+  Future<Map<String,dynamic>> parseCraving(String text) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/cravings/parse'),
+      headers:_headers,
+      body:jsonEncode({'text':text}),
+    );
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
   Future<List<RecommendationItem>> goldenFlow(String craving) async {
     final r = await http.post(Uri.parse('$baseUrl/golden-flow'), headers: _headers, body: jsonEncode({
       'craving_text': craving,
