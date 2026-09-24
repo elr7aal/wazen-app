@@ -314,4 +314,23 @@ class WazenApi {
     return ProgressSummary.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
+
+  Future<Map<String,dynamic>> forgotPassword(String email) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/auth/forgot-password'),
+      headers:{'Content-Type':'application/json'},
+      body:jsonEncode({'email':email.trim()}),
+    );
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
+  Future<void> resetPassword(String resetToken,String newPassword) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/auth/reset-password'),
+      headers:{'Content-Type':'application/json'},
+      body:jsonEncode({'token':resetToken,'new_password':newPassword}),
+    );
+    _unwrap(r);
+  }
+
 }
