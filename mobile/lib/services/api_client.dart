@@ -9,29 +9,6 @@ class ApiException implements Exception {
   const ApiException(this.message, [this.statusCode]);
   @override
   String toString() => message;
-
-  Future<WeeklyPlan> weeklyPlan() async {
-    final r=await http.get(Uri.parse('$baseUrl/plan/week'),headers:_headers);
-    return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
-  }
-
-  Future<WeeklyPlan> regenerateWeeklyPlan() async {
-    final r=await http.post(Uri.parse('$baseUrl/plan/week/generate'),headers:_headers);
-    return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
-  }
-
-  Future<WeeklyPlan> rebalancePlanDay(DateTime date) async {
-    final d='${date.year.toString().padLeft(4,'0')}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}';
-    final r=await http.post(Uri.parse('$baseUrl/plan/day/$d/rebalance'),headers:_headers);
-    return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
-  }
-
-  Future<ProgressSummary> progress(String range) async {
-    final uri=Uri.parse('$baseUrl/progress').replace(queryParameters:{'range':range});
-    final r=await http.get(uri,headers:_headers);
-    return ProgressSummary.fromJson(Map<String,dynamic>.from(_unwrap(r)));
-  }
-
 }
 
 class WazenApi {
@@ -273,6 +250,29 @@ class WazenApi {
   Future<Map<String,dynamic>> profileInsights() async {
     final r=await http.get(Uri.parse('$baseUrl/profile/insights'),headers:_headers);
     return Map<String,dynamic>.from(_unwrap(r));
+  }
+
+
+  Future<WeeklyPlan> weeklyPlan() async {
+    final r=await http.get(Uri.parse('$baseUrl/plan/week'),headers:_headers);
+    return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
+  }
+
+  Future<WeeklyPlan> regenerateWeeklyPlan() async {
+    final r=await http.post(Uri.parse('$baseUrl/plan/week/generate'),headers:_headers);
+    return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
+  }
+
+  Future<WeeklyPlan> rebalancePlanDay(DateTime date) async {
+    final d='${date.year.toString().padLeft(4,'0')}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}';
+    final r=await http.post(Uri.parse('$baseUrl/plan/day/$d/rebalance'),headers:_headers);
+    return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
+  }
+
+  Future<ProgressSummary> progress(String range) async {
+    final uri=Uri.parse('$baseUrl/progress').replace(queryParameters:{'range':range});
+    final r=await http.get(uri,headers:_headers);
+    return ProgressSummary.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
 }
