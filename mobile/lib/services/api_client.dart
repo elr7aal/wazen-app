@@ -464,4 +464,26 @@ class WazenApi {
     return foodLogToday();
   }
 
+
+  Future<Map<String,dynamic>> activityToday() async {
+    final r=await http.get(Uri.parse('$baseUrl/activity-log/today'),headers:_headers);
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
+  Future<DailyState> addActivityCredit(double caloriesCredit,{String source='MANUAL',String? note}) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/activity-log'),
+      headers:_headers,
+      body:jsonEncode({'calories_credit':caloriesCredit,'source':source,'note':note}),
+    );
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return DailyState.fromJson(Map<String,dynamic>.from(data['daily_state'] as Map));
+  }
+
+  Future<DailyState> deleteActivityCredit(String activityId) async {
+    final r=await http.delete(Uri.parse('$baseUrl/activity-log/$activityId'),headers:_headers);
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return DailyState.fromJson(Map<String,dynamic>.from(data['daily_state'] as Map));
+  }
+
 }
