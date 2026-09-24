@@ -1,0 +1,32 @@
+name: Bootstrap WAZEN v15
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.bootstrap/wazen_v15.b64'
+      - '.github/workflows/bootstrap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack WAZEN v15
+        run: |
+          base64 --decode .bootstrap/wazen_v15.b64 > /tmp/wazen.zip
+          rm -rf /tmp/unpack
+          mkdir -p /tmp/unpack
+          unzip -q /tmp/wazen.zip -d /tmp/unpack
+          cp -a /tmp/unpack/wazen_starter/. .
+          rm -rf .bootstrap .github/workflows/bootstrap.yml
+      - name: Commit WAZEN v15
+        run: |
+          git config user.name "WAZEN Bootstrap"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Bootstrap WAZEN v15" || exit 0
+          git push
