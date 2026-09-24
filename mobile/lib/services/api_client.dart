@@ -342,4 +342,29 @@ class WazenApi {
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
   }
 
+
+  Future<List<Map<String,dynamic>>> preferenceSettings() async {
+    final r=await http.get(Uri.parse('$baseUrl/preferences'),headers:_headers);
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return ((data['items'] as List?)??const [])
+      .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String,dynamic>> setPreference({
+    required String targetType,
+    required String targetValue,
+    required String level,
+  }) async {
+    final r=await http.put(
+      Uri.parse('$baseUrl/preferences'),
+      headers:_headers,
+      body:jsonEncode({
+        'target_type':targetType,
+        'target_value':targetValue,
+        'level':level,
+      }),
+    );
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
 }
