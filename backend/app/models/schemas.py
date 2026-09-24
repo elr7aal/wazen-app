@@ -38,6 +38,7 @@ class RecommendationRequest(BaseModel):
     disliked_terms: List[str] = []
     behavior_scores: Dict[str, float] = {}
     preference_levels: Dict[str, str] = {}
+    food_preference_levels: Dict[str, str] = {}
     never_show_terms: List[str] = []
     never_show_food_ids: List[str] = []
 
