@@ -245,3 +245,19 @@ class UserPreferenceSetting(Base):
     target_value: Mapped[str] = mapped_column(String(120), index=True)
     level: Mapped[str] = mapped_column(String(20), default='NEUTRAL', index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+
+class HealthLimit(Base):
+    __tablename__ = 'health_limits'
+    __table_args__ = (UniqueConstraint('user_id', 'nutrient_code', 'limit_type', name='uq_user_health_limit'),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    nutrient_code: Mapped[str] = mapped_column(String(40), index=True)
+    limit_type: Mapped[str] = mapped_column(String(12), index=True)
+    value: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20))
+    severity: Mapped[str] = mapped_column(String(12), default='SOFT', index=True)
+    source_type: Mapped[str] = mapped_column(String(20), default='USER', index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
