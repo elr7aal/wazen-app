@@ -37,13 +37,14 @@ from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
 from app.services.natural_language import parse_natural_food_text
 from app.services.vision_review import build_vision_review
+from app.services.craving_parser import parse_craving_text
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.5.0')
+app = FastAPI(title='WAZEN API', version='1.6.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,7 +62,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.5.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.6.0'})
 
 
 # -------- Authentication --------
@@ -624,28 +625,7 @@ class CravingRequest(BaseModel):
 
 @app.post('/api/v1/cravings/parse')
 def parse_craving(req: CravingRequest):
-    t = req.text.lower().strip()
-    restaurant: Optional[str] = None
-    if 'هارديز' in t or 'hardee' in t:
-        restaurant = "Hardee's UAE"
-    elif 'كي اف سي' in t or 'كي إف سي' in t or 'kfc' in t:
-        restaurant = 'KFC UAE'
-    elif 'ماكدونالد' in t or 'mcdonald' in t:
-        restaurant = "McDonald's UAE"
-
-    category: Optional[str] = None
-    if any(x in t for x in ['برغر','برجر','burger','زنجر','zinger']): category = 'BURGERS'
-    elif any(x in t for x in ['بيتزا','pizza']): category = 'PIZZA'
-    elif any(x in t for x in ['حلا','حلويات','dessert','sweet']): category = 'DESSERT'
-
-    max_calories = None
-    for p in [r'(?:تحت|اقل من|أقل من|under|below)\s*(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)?', r'(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)']:
-        m = re.search(p,t)
-        if m:
-            max_calories=float(m.group(1)); break
-
-    confidence = min(.99, .5 + (.2 if restaurant else 0)+(.2 if category else 0)+(.1 if max_calories else 0))
-    return envelope({'intent':'EAT_NOW','restaurant':restaurant,'food_category':category,'max_calories':max_calories,'confidence':confidence})
+    return envelope(parse_craving_text(req.text))
 
 
 # -------- Stateless compatibility endpoints --------
@@ -705,35 +685,9 @@ def add_food_log_from_catalog(req: CatalogFoodLogRequest, user: User = Depends(g
     })
 
 
-def _parse_craving_payload(text: str):
-    t = text.lower().strip()
-    restaurant = None
-    if 'هارديز' in t or 'hardee' in t:
-        restaurant = "Hardee's UAE"
-    elif 'كي اف سي' in t or 'كي إف سي' in t or 'kfc' in t:
-        restaurant = 'KFC UAE'
-    elif 'ماكدونالد' in t or 'mcdonald' in t:
-        restaurant = "McDonald's UAE"
-
-    category = None
-    if any(x in t for x in ['برغر','برجر','burger','زنجر','zinger']):
-        category = 'BURGERS'
-    elif any(x in t for x in ['بيتزا','pizza']):
-        category = 'PIZZA'
-    elif any(x in t for x in ['حلا','حلويات','dessert','sweet']):
-        category = 'DESSERT'
-
-    max_calories = None
-    for p in [r'(?:تحت|اقل من|أقل من|under|below)\s*(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)?', r'(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)']:
-        m = re.search(p,t)
-        if m:
-            max_calories=float(m.group(1)); break
-    return restaurant, category, max_calories
-
-
 @app.post('/api/v1/golden-flow')
 def golden_flow(req: GoldenFlowRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    restaurant, category, max_calories = _parse_craving_payload(req.craving_text)
+    parsed=parse_craving_text(req.craving_text)
 
     logged = None
     if req.auto_log_food_id:
@@ -750,24 +704,22 @@ def golden_flow(req: GoldenFlowRequest, user: User = Depends(get_current_user), 
 
     recommendations = recommend_for_user(
         db, user,
-        vendor=restaurant,
-        category=category,
-        max_calories=max_calories,
-        allow_modifications=req.allow_modifications
+        vendor=parsed['restaurant'],
+        category=parsed['food_category'],
+        max_calories=parsed['max_calories'],
+        min_protein_g=parsed['min_protein_g'],
+        budget_max=parsed['budget_max'],
+        allow_modifications=req.allow_modifications,
     )
 
     return envelope({
-        'parsed_intent': {
-            'intent':'EAT_NOW',
-            'restaurant': restaurant,
-            'food_category': category,
-            'max_calories': max_calories,
-        },
+        'parsed_intent': parsed,
         'logged': logged,
         'daily_totals': today_totals(db, user.id),
         'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump(),
         'recommendations': recommendations,
     })
+
 
 MAKE_IT_FIT_COMPONENTS = [
     {'component':'REGULAR_PEPSI_453ML','label_ar':'استبدال البيبسي العادي بدايت بيبسي','label_en':'Replace Regular Pepsi with Diet Pepsi','modifier_id':'KFC-MOD-001'},
