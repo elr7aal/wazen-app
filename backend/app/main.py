@@ -31,13 +31,14 @@ from app.services.profile_insights import profile_insights
 from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods
 from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
 from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset
+from app.services.goal_history import add_goal_snapshot, list_goal_history
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='0.7.0')
+app = FastAPI(title='WAZEN API', version='0.8.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,7 +56,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.7.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.8.0'})
 
 
 # -------- Authentication --------
@@ -164,6 +165,7 @@ def update_me(req: ProfileUpdateRequest, user: User = Depends(get_current_user),
         setattr(p, k, v)
     if req.weight_kg is not None:
         record_weight(db, user.id, req.weight_kg)
+    add_goal_snapshot(db, user.id, p, 'PROFILE_UPDATE')
     db.commit(); db.refresh(user); db.refresh(p)
     return me(user, db)
 
@@ -201,6 +203,7 @@ def complete_onboarding(req: OnboardingCompleteRequest, user: User = Depends(get
     p.sodium_max_mg = targets['sodium_max_mg']
     p.onboarding_complete = True
     record_weight(db, user.id, req.weight_kg)
+    add_goal_snapshot(db, user.id, p, 'ONBOARDING')
     db.commit()
     db.refresh(p)
     return envelope({'complete': True, 'targets': targets, 'profile': me(user, db)['data']['profile']})
@@ -245,8 +248,19 @@ def recalculate_plan(req: PlanRecalculateRequest, user: User = Depends(get_curre
     p.target_fat_g=targets['target_fat_g']
     p.sodium_max_mg=targets['sodium_max_mg']
     record_weight(db, user.id, p.weight_kg)
+    add_goal_snapshot(db, user.id, p, 'RECALCULATE')
     db.commit(); db.refresh(p)
     return envelope({'targets':targets,'profile':me(user,db)['data']['profile']})
+
+
+@app.get('/api/v1/profile/history')
+def profile_history(
+    limit: int = 50,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items=list_goal_history(db, user.id, limit)
+    return envelope({'items':items,'count':len(items)})
 
 
 # -------- Food Log + persisted daily state --------
