@@ -40,13 +40,13 @@ class _HealthLimitsScreenState extends State<HealthLimitsScreen>{
   }
 
   Future<void> edit([Map<String,dynamic>? current])async{
-    String nutrient=current?['nutrient_code']?.toString()??'SODIUM_MG':'SODIUM_MG';
-    String limitType=current?['limit_type']?.toString()??'MAX':'MAX';
-    String severity=current?['severity']?.toString()??'SOFT':'SOFT';
-    String source=current?['source_type']?.toString()??'USER':'USER';
-    bool active=current?['active']!=false:true;
-    final value=TextEditingController(text:current?['value']?.toString()??'':'');
-    final note=TextEditingController(text:current?['note']?.toString()??'':'');
+    String nutrient=current?['nutrient_code']?.toString()??'SODIUM_MG';
+    String limitType=current?['limit_type']?.toString()??'MAX';
+    String severity=current?['severity']?.toString()??'SOFT';
+    String source=current?['source_type']?.toString()??'USER';
+    bool active=current?['active']!=false;
+    final value=TextEditingController(text:current?['value']?.toString()??'');
+    final note=TextEditingController(text:current?['note']?.toString()??'');
 
     final saved=await showDialog<bool>(
       context:context,
