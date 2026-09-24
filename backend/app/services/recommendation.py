@@ -56,6 +56,10 @@ def _preference_score(item, req):
         if _term_matches(term,text):
             explicit_delta += weights.get(level.upper(),0.0)
             explicit_hits.append((term,level.upper()))
+    food_level=req.food_preference_levels.get(item.id)
+    if food_level:
+        explicit_delta += weights.get(food_level.upper(),0.0)
+        explicit_hits.append((item.id,food_level.upper()))
     score=80.0 + min(15.0,pref_hits*7.5) - min(25.0,dislike_hits*12.5) + explicit_delta + max(-15.0,min(12.0,behavior))
     return max(0.0,min(100.0,score)), pref_hits, dislike_hits, behavior, explicit_hits
 
