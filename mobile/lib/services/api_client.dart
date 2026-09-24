@@ -20,11 +20,13 @@ class WazenApi {
     defaultValue: 'http://127.0.0.1:8000/api/v1',
   );
   String? token;
+  String? refreshToken;
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
     baseUrl = prefs.getString('api_base_url') ?? baseUrl;
     token = prefs.getString('access_token');
+    refreshToken = prefs.getString('refresh_token');
   }
 
   Future<void> configureBaseUrl(String value) async {
@@ -55,25 +57,62 @@ class WazenApi {
       'email': email, 'password': password, 'first_name': firstName, 'language': 'ar',
     }));
     final data = _unwrap(r) as Map<String, dynamic>;
-    await _saveToken(data['access_token'] as String);
+    await _saveSession(data);
   }
 
   Future<void> login(String email, String password) async {
     final r = await http.post(Uri.parse('$baseUrl/auth/login'), headers: _headers, body: jsonEncode({'email': email, 'password': password}));
     final data = _unwrap(r) as Map<String, dynamic>;
-    await _saveToken(data['access_token'] as String);
+    await _saveSession(data);
   }
 
-  Future<void> _saveToken(String value) async {
-    token = value;
+  Future<void> _saveSession(Map<String,dynamic> data) async {
+    token = data['access_token']?.toString();
+    refreshToken = data['refresh_token']?.toString();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('access_token', value);
+    if(token!=null)await prefs.setString('access_token',token!);
+    if(refreshToken!=null)await prefs.setString('refresh_token',refreshToken!);
   }
 
-  Future<void> logout() async {
-    token = null;
-    final prefs = await SharedPreferences.getInstance();
+  Future<bool> refreshSession() async {
+    final value=refreshToken;
+    if(value==null||value.isEmpty)return false;
+    try{
+      final r=await http.post(
+        Uri.parse('$baseUrl/auth/refresh'),
+        headers:{'Content-Type':'application/json'},
+        body:jsonEncode({'refresh_token':value}),
+      );
+      final data=Map<String,dynamic>.from(_unwrap(r));
+      await _saveSession(data);
+      return true;
+    }catch(_){
+      await clearSession();
+      return false;
+    }
+  }
+
+  Future<void> clearSession() async {
+    token=null;
+    refreshToken=null;
+    final prefs=await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
+  }
+
+  Future<void> logout({bool allSessions=false}) async {
+    final access=token;
+    final refresh=refreshToken;
+    if(access!=null&&refresh!=null){
+      try{
+        await http.post(
+          Uri.parse('$baseUrl/auth/logout'),
+          headers:_headers,
+          body:jsonEncode({'refresh_token':refresh,'all_sessions':allSessions}),
+        );
+      }catch(_){}
+    }
+    await clearSession();
   }
 
   Future<Map<String, dynamic>> me() async {
