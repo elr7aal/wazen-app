@@ -68,7 +68,7 @@ def _preference_score(item, req):
 def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
     daily = calculate_daily_state(req.daily_state)
     hard_max_calories = req.max_calories
-    candidates = query_foods(db, vendor=req.vendor, category=req.category, limit=100)
+    candidates = query_foods(db, vendor=req.vendor, category=req.category, min_protein_g=req.min_protein_g, limit=100)
     results: List[Dict[str, Any]]=[]; excluded=[]
     severe={a.upper() for a in req.severe_allergens}
 
