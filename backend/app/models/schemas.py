@@ -215,3 +215,14 @@ class PreferenceSettingRequest(BaseModel):
     target_type: Literal['TERM','FOOD']
     target_value: str = Field(min_length=1, max_length=120)
     level: Literal['LOVE','LIKE','NEUTRAL','DISLIKE','NEVER_SHOW']
+
+
+class HealthLimitRequest(BaseModel):
+    nutrient_code: Literal['CALORIES','PROTEIN_G','CARBS_G','FAT_G','SATURATED_FAT_G','SUGAR_G','SODIUM_MG']
+    limit_type: Literal['MAX','MIN']
+    value: float = Field(ge=0)
+    unit: str = Field(min_length=1, max_length=20)
+    severity: Literal['HARD','SOFT'] = 'SOFT'
+    source_type: Literal['USER','CLINICIAN'] = 'USER'
+    note: Optional[str] = Field(default=None, max_length=500)
+    active: bool = True
