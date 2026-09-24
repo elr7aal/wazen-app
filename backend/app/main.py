@@ -383,6 +383,7 @@ def _serialize_favorite(x: FavoriteMeal):
         'protein_g':x.protein_g,
         'carbs_g':x.carbs_g,
         'fat_g':x.fat_g,
+        'fiber_g':x.fiber_g,
         'sodium_mg':x.sodium_mg,
         'created_at':x.created_at.isoformat(),
     }
@@ -407,6 +408,7 @@ def duplicate_food_log(
         protein_g=source.protein_g,
         carbs_g=source.carbs_g,
         fat_g=source.fat_g,
+        fiber_g=source.fiber_g,
         sodium_mg=source.sodium_mg,
     )
     db.add(row);db.commit();db.refresh(row)
@@ -486,6 +488,7 @@ def log_favorite_meal(
         protein_g=fav.protein_g,
         carbs_g=fav.carbs_g,
         fat_g=fav.fat_g,
+        fiber_g=fav.fiber_g,
         sodium_mg=fav.sodium_mg,
     )
     db.add(row);db.commit();db.refresh(row)
