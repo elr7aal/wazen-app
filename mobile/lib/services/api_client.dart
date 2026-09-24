@@ -426,4 +426,33 @@ class WazenApi {
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
+
+  Future<FoodLogDay> duplicateFoodLog(String logId) async {
+    final r=await http.post(Uri.parse('$baseUrl/food-log/$logId/duplicate'),headers:_headers);
+    _unwrap(r);
+    return foodLogToday();
+  }
+
+  Future<Map<String,dynamic>> favoriteFoodLog(String logId) async {
+    final r=await http.post(Uri.parse('$baseUrl/food-log/$logId/favorite'),headers:_headers);
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
+  Future<List<Map<String,dynamic>>> favoriteMeals() async {
+    final r=await http.get(Uri.parse('$baseUrl/food-log/favorites'),headers:_headers);
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return ((data['items'] as List?)??const [])
+      .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+
+  Future<FoodLogDay> logFavoriteMeal(String favoriteId,{String? mealType}) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/food-log/favorites/$favoriteId/log'),
+      headers:_headers,
+      body:jsonEncode({'meal_type':mealType}),
+    );
+    _unwrap(r);
+    return foodLogToday();
+  }
+
 }
