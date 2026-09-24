@@ -1,4 +1,4 @@
-name: Deploy WAZEN PWA
+name: Build WAZEN Web
 
 on:
   push:
@@ -9,13 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   build:
@@ -39,26 +33,15 @@ jobs:
         working-directory: mobile
         run: >
           flutter build web --release
-          --base-href /wazen-app/
           --dart-define=API_BASE_URL=https://wazen-api-production-ee44.up.railway.app/api/v1
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: mobile/build/web
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Save built web app in repository
+        run: |
+          rm -rf mobile/web-dist
+          mkdir -p mobile/web-dist
+          cp -a mobile/build/web/. mobile/web-dist/
+          git config user.name "WAZEN Web Builder"
+          git config user.email "actions@github.com"
+          git add -f mobile/web-dist
+          git commit -m "chore: publish WAZEN web build [skip ci]" || exit 0
+          git push
