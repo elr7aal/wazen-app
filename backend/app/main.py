@@ -417,7 +417,7 @@ def duplicate_food_log(
         'item':{
             'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
             'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
-            'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
+            'carbs_g':row.carbs_g,'fat_g':row.fat_g,'fiber_g':row.fiber_g,'sodium_mg':row.sodium_mg,
             'logged_at':row.logged_at.isoformat(),
         },
         'totals':today_totals(db,user.id),
@@ -768,11 +768,12 @@ def add_modified_catalog_food(req: ModifiedCatalogFoodLogRequest, user: User = D
         db,user,req.food_id,
         (food.name_en or food.name_ar or req.food_id)+(' - Modified' if fit['applied_modifications'] else ''),
         req.meal_type,
-        (n['calories'] or 0)*q,
-        (n['protein_g'] or 0)*q,
-        (n['carbs_g'] or 0)*q,
-        (n['fat_g'] or 0)*q,
-        (n['sodium_mg'] or 0)*q,
+        calories=(n['calories'] or 0)*q,
+        protein_g=(n['protein_g'] or 0)*q,
+        carbs_g=(n['carbs_g'] or 0)*q,
+        fat_g=(n['fat_g'] or 0)*q,
+        fiber_g=(food.nutrition.fiber_g or 0)*q if food and food.nutrition else 0,
+        sodium_mg=(n['sodium_mg'] or 0)*q,
     )
     return envelope({
         'log':{
