@@ -8,6 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/api_models.dart';
 import '../services/api_client.dart';
 import 'add_food_review_screen.dart';
+import 'text_parse_preview_screen.dart';
 
 class AddFoodScreen extends StatefulWidget{
   const AddFoodScreen({super.key});
@@ -77,8 +78,26 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
   Future<void> doText()async{
     if(natural.text.trim().isEmpty)return;
     setState(()=>loading=true);
-    try{await showResults(await WazenApi.instance.parseFoodText(natural.text.trim(),mealType:meal),'ما قدرت أحدد المنتج بثقة. جرب البحث بالاسم أو عدّل الوصف.');}
-    finally{if(mounted)setState(()=>loading=false);}
+    try{
+      final parsed=await WazenApi.instance.parseFoodTextDetailed(natural.text.trim(),mealType:meal);
+      if(!mounted)return;
+      final rows=((parsed['items'] as List?)??const []);
+      if(rows.isEmpty){
+        setState(()=>message='ما قدرت أحدد أي عنصر من النص. جرّب صياغة أبسط أو استخدم البحث.');
+        return;
+      }
+      final saved=await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder:(_)=>TextParsePreviewScreen(parsed:parsed,mealType:meal),
+        ),
+      );
+      if(saved==true&&mounted)Navigator.pop(context,true);
+    }catch(e){
+      if(mounted)setState(()=>message=e.toString());
+    }finally{
+      if(mounted)setState(()=>loading=false);
+    }
   }
 
   Future<void> pickImage()async{
