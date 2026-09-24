@@ -184,3 +184,28 @@ Unified Add Food flow:
 - Email sign-in/register UI cleaned for real use; Alpha demo credentials removed.
 - API URL moved behind advanced connection settings.
 - Apple, Google and mobile-number sign-in appear only as clearly unavailable placeholders until a secure provider is connected; they do not simulate authentication.
+
+
+## v19 — Secure Sessions
+- Access + refresh token sessions.
+- Refresh token rotation; reused refresh tokens are rejected.
+- Logout revokes the active refresh session; all-session revocation is supported.
+- Password reset tokens are single-use, expiring and revoke old sessions after a successful reset.
+- Password-reset responses do not reveal whether an email exists.
+- Mobile stores refresh tokens and restores an expired session automatically.
+- Password recovery UI clearly reports when email delivery is not yet configured.
+- Backend v19 baseline: **56 passing tests**.
+
+## v20 — Goal History
+- Goal/profile snapshots are retained on onboarding, meaningful profile updates and plan recalculation.
+- Duplicate snapshots are skipped.
+- New `GET /api/v1/profile/history` endpoint.
+- Account screen shows recent plan/goal history including weight, target weight and calorie target.
+
+## v21 — Preference Levels
+- Explicit preferences support: `LOVE / LIKE / NEUTRAL / DISLIKE / NEVER_SHOW`.
+- Preferences can target a food term/category or a specific food item.
+- `NEVER_SHOW` is applied before ranking as an explicit user exclusion.
+- LOVE/LIKE/DISLIKE adjust preference scoring but never override severe-allergy exclusions.
+- Account UI supports five-level preference controls and synchronizes legacy like/dislike signals.
+- Backend v21 baseline: **62 passing tests**.
