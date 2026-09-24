@@ -61,6 +61,47 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+
+  Future<void> forgotPassword() async {
+    final controller=TextEditingController(text:email.text.trim());
+    final value=await showDialog<String>(
+      context:context,
+      builder:(ctx)=>AlertDialog(
+        title:Text(arabic?'استعادة كلمة المرور':'Reset password'),
+        content:TextField(
+          controller:controller,
+          keyboardType:TextInputType.emailAddress,
+          textDirection:TextDirection.ltr,
+          decoration:InputDecoration(labelText:arabic?'البريد الإلكتروني':'Email'),
+        ),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx),child:Text(arabic?'إلغاء':'Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),child:Text(arabic?'متابعة':'Continue')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if(value==null||value.isEmpty)return;
+    setState(()=>loading=true);
+    try{
+      final result=await WazenApi.instance.forgotPassword(value);
+      if(!mounted)return;
+      final delivery=(result['delivery']??'NOT_CONFIGURED').toString();
+      final msg=delivery=='NOT_CONFIGURED'
+        ?(arabic?'خدمة استعادة كلمة المرور جاهزة برمجيًا، لكن مزود البريد لم يتم ربطه بعد.':'Password recovery is implemented, but the email delivery provider is not connected yet.')
+        :(arabic?'إذا كان الحساب موجودًا، ستصلك تعليمات الاستعادة.':'If the account exists, recovery instructions will be sent.');
+      await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
+        title:Text(arabic?'استعادة كلمة المرور':'Reset password'),
+        content:Text(msg),
+        actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text(arabic?'تمام':'OK'))],
+      ));
+    }catch(e){
+      if(mounted)setState(()=>error=e.toString());
+    }finally{
+      if(mounted)setState(()=>loading=false);
+    }
+  }
+
   @override
   Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(
@@ -130,6 +171,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 :null,
             ),
           ),
+          if(!registerMode)
+            Align(
+              alignment:AlignmentDirectional.centerEnd,
+              child:TextButton(
+                onPressed:loading?null:forgotPassword,
+                child:Text(arabic?'نسيت كلمة المرور؟':'Forgot password?'),
+              ),
+            ),
           if(error!=null)Padding(
             padding:const EdgeInsets.only(top:12),
             child:Text(error!,style:const TextStyle(color:Colors.red)),
