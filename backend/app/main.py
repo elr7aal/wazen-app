@@ -10,13 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import Base, engine, get_db, SessionLocal
-from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback, AdminAuditLog, FavoriteMeal
+from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback, AdminAuditLog, FavoriteMeal, ActivityLog
 from app.models.schemas import (
     DailyStateRequest, RecommendationRequest, MakeItFitRequest, RebalanceRequest,
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
     UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
     RefreshTokenRequest, LogoutRequest, ForgotPasswordRequest, ResetPasswordRequest,
-    PreferenceSettingRequest, HealthLimitRequest,
+    PreferenceSettingRequest, HealthLimitRequest, ActivityLogCreateRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -24,7 +24,7 @@ from app.services.daily_state import calculate_daily_state
 from app.services.recommendation import recommend_now
 from app.services.make_it_fit import make_it_fit
 from app.services.rebalance import rebalance_day
-from app.services.persistence import ensure_profile, build_daily_request, today_totals, recommend_for_user, log_catalog_food, log_nutrition_snapshot
+from app.services.persistence import ensure_profile, build_daily_request, today_totals, today_activity_credit, recommend_for_user, log_catalog_food, log_nutrition_snapshot
 from app.services.catalog import ensure_catalog_seeded, query_foods, serialize_food
 from app.services.vision import analyze_food_image
 from app.services.onboarding import calculate_targets
@@ -43,7 +43,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.4.0')
+app = FastAPI(title='WAZEN API', version='1.5.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,7 +61,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.4.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.5.0'})
 
 
 # -------- Authentication --------
@@ -146,6 +146,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             'activity_level': p.activity_level, 'goal_type': p.goal_type, 'daily_budget': p.daily_budget,
             'target_calories': p.target_calories, 'target_protein_g': p.target_protein_g,
             'target_carbs_g': p.target_carbs_g, 'target_fat_g': p.target_fat_g,
+            'target_fiber_g': p.target_fiber_g,
             'sodium_max_mg': p.sodium_max_mg, 'severe_allergens': p.severe_allergens(),
             'date_of_birth': p.date_of_birth.isoformat() if p.date_of_birth else None,
             'gender': p.gender, 'food_preferences': p.food_preferences(),
@@ -326,7 +327,7 @@ def food_log_today(user: User = Depends(get_current_user), db: Session = Depends
     return envelope({
         'items': [
             {'id':x.id,'food_id':x.food_id,'food_name':x.food_name,'meal_type':x.meal_type,'entry_method':x.entry_method,
-             'calories':x.calories,'protein_g':x.protein_g,'carbs_g':x.carbs_g,'fat_g':x.fat_g,'sodium_mg':x.sodium_mg,
+             'calories':x.calories,'protein_g':x.protein_g,'carbs_g':x.carbs_g,'fat_g':x.fat_g,'fiber_g':x.fiber_g,'sodium_mg':x.sodium_mg,
              'logged_at':x.logged_at.isoformat()} for x in rows
         ],
         'totals': today_totals(db, user.id),
@@ -352,7 +353,7 @@ def update_food_log(log_id: str, req: FoodLogUpdateRequest, user: User = Depends
             'id':row.id,'food_id':row.food_id,'food_name':row.food_name,
             'meal_type':row.meal_type,'entry_method':row.entry_method,
             'calories':row.calories,'protein_g':row.protein_g,'carbs_g':row.carbs_g,
-            'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,'logged_at':row.logged_at.isoformat(),
+            'fat_g':row.fat_g,'fiber_g':row.fiber_g,'sodium_mg':row.sodium_mg,'logged_at':row.logged_at.isoformat(),
         },
         'totals': today_totals(db,user.id),
         'daily_state': calculate_daily_state(build_daily_request(db,user)).model_dump(),
@@ -499,6 +500,68 @@ def log_favorite_meal(
         'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
     })
 
+
+@app.post('/api/v1/activity-log')
+def add_activity_log(
+    req: ActivityLogCreateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row=ActivityLog(
+        user_id=user.id,
+        calories_credit=req.calories_credit,
+        source=req.source,
+        note=req.note,
+    )
+    db.add(row);db.commit();db.refresh(row)
+    return envelope({
+        'item':{
+            'id':row.id,'calories_credit':row.calories_credit,'source':row.source,
+            'note':row.note,'logged_at':row.logged_at.isoformat(),
+        },
+        'activity_credit':today_activity_credit(db,user.id),
+        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
+
+
+@app.get('/api/v1/activity-log/today')
+def activity_log_today(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime, timezone
+    now=datetime.now(timezone.utc).replace(tzinfo=None)
+    start=now.replace(hour=0,minute=0,second=0,microsecond=0)
+    rows=db.scalars(select(ActivityLog).where(
+        ActivityLog.user_id==user.id,
+        ActivityLog.logged_at>=start,
+    ).order_by(ActivityLog.logged_at)).all()
+    return envelope({
+        'items':[{
+            'id':x.id,'calories_credit':x.calories_credit,'source':x.source,
+            'note':x.note,'logged_at':x.logged_at.isoformat(),
+        } for x in rows],
+        'activity_credit':today_activity_credit(db,user.id),
+        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
+
+
+@app.delete('/api/v1/activity-log/{activity_id}')
+def delete_activity_log(
+    activity_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row=db.get(ActivityLog,activity_id)
+    if not row or row.user_id!=user.id:
+        raise HTTPException(status_code=404,detail='Activity log not found')
+    db.delete(row);db.commit()
+    return envelope({
+        'deleted':True,
+        'activity_credit':today_activity_credit(db,user.id),
+        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
+
 @app.get('/api/v1/nutrition/today')
 def nutrition_today(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return envelope({'totals': today_totals(db,user.id), 'daily_request': build_daily_request(db,user).model_dump(), 'daily_state': calculate_daily_state(build_daily_request(db,user)).model_dump()})
@@ -632,7 +695,7 @@ def add_food_log_from_catalog(req: CatalogFoodLogRequest, user: User = Depends(g
         'log': {
             'id': row.id, 'food_id': row.food_id, 'food_name': row.food_name,
             'meal_type': row.meal_type, 'quantity': req.quantity, 'calories': row.calories,
-            'protein_g': row.protein_g, 'carbs_g': row.carbs_g, 'fat_g': row.fat_g, 'sodium_mg': row.sodium_mg
+            'protein_g': row.protein_g, 'carbs_g': row.carbs_g, 'fat_g': row.fat_g, 'fiber_g': row.fiber_g, 'sodium_mg': row.sodium_mg
         },
         'daily_totals': today_totals(db, user.id),
         'daily_state': state,
