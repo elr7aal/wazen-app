@@ -16,6 +16,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
   Map<String,dynamic>? user;
   Map<String,dynamic>? insights;
   List<Map<String,dynamic>> goalHistory=[];
+  Map<String,String> explicitPreferences={};
   bool loading=true,saving=false;
   String? error;
 
@@ -51,12 +52,19 @@ class _ProfileScreenState extends State<ProfileScreen>{
   Future<void> load()async{
     setState(()=>loading=true);
     try{
-      final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights(),WazenApi.instance.goalHistory(limit:8)]);
+      final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights(),WazenApi.instance.goalHistory(limit:8),WazenApi.instance.preferenceSettings()]);
       final u=Map<String,dynamic>.from(results[0]);
       final p=Map<String,dynamic>.from(u['profile'] as Map);
       if(!mounted)return;
       setState((){
-        user=u; insights=Map<String,dynamic>.from(results[1]); goalHistory=List<Map<String,dynamic>>.from(results[2] as List);
+        user=u;
+        insights=Map<String,dynamic>.from(results[1]);
+        goalHistory=List<Map<String,dynamic>>.from(results[2] as List);
+        explicitPreferences={
+          for(final row in List<Map<String,dynamic>>.from(results[3] as List))
+            if((row['target_type']??'').toString()=='TERM')
+              (row['target_value']??'').toString():(row['level']??'NEUTRAL').toString(),
+        };
         weight.text='${p['weight_kg']??''}';
         targetWeight.text='${p['target_weight_kg']??''}';
         budget.text='${p['daily_budget']??''}';
@@ -182,19 +190,9 @@ class _ProfileScreenState extends State<ProfileScreen>{
         ]),
         const SizedBox(height:16),
         _section('ذوقي',[
-          const Text('أحب',style:TextStyle(fontWeight:FontWeight.w900)),
-          const SizedBox(height:8),
-          Wrap(spacing:8,runSpacing:8,children:foodOptions.entries.map((e)=>FilterChip(
-            label:Text(e.value),selected:prefs.contains(e.key),
-            onSelected:(v)=>setState(()=>v?prefs.add(e.key):prefs.remove(e.key)),
-          )).toList()),
-          const SizedBox(height:18),
-          const Text('ما أفضل',style:TextStyle(fontWeight:FontWeight.w900)),
-          const SizedBox(height:8),
-          Wrap(spacing:8,runSpacing:8,children:foodOptions.entries.map((e)=>FilterChip(
-            label:Text(e.value),selected:dislikes.contains(e.key),
-            onSelected:(v)=>setState(()=>v?dislikes.add(e.key):dislikes.remove(e.key)),
-          )).toList()),
+          const Text('حدد درجة تفضيلك. «لا تعرضه» يخفي هذا النوع من توصياتك، بينما باقي الدرجات تؤثر على الترتيب فقط.',style:TextStyle(color:Colors.black54,height:1.4)),
+          const SizedBox(height:12),
+          ...foodOptions.entries.map((e)=>_preferenceRow(e.key,e.value)),
         ]),
         const SizedBox(height:16),
         _goalHistorySection(),
@@ -214,6 +212,74 @@ class _ProfileScreenState extends State<ProfileScreen>{
       ]),
     ),
   );
+
+
+  Future<void> setPreferenceLevel(String term,String level) async {
+    final previous=explicitPreferences[term]??(prefs.contains(term)?'LIKE':dislikes.contains(term)?'DISLIKE':'NEUTRAL');
+    setState(()=>explicitPreferences[term]=level);
+    if(level=='LOVE'||level=='LIKE'){
+      prefs.add(term);dislikes.remove(term);
+    }else if(level=='DISLIKE'){
+      dislikes.add(term);prefs.remove(term);
+    }else{
+      prefs.remove(term);dislikes.remove(term);
+    }
+    try{
+      await WazenApi.instance.setPreference(targetType:'TERM',targetValue:term,level:level);
+      await WazenApi.instance.updateProfile({
+        'food_preferences':prefs.toList(),
+        'disliked_foods':dislikes.toList(),
+      });
+    }catch(e){
+      if(mounted){
+        setState(()=>explicitPreferences[term]=previous);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));
+      }
+    }
+  }
+
+  Widget _preferenceRow(String key,String label){
+    final level=explicitPreferences[key]??(prefs.contains(key)?'LIKE':dislikes.contains(key)?'DISLIKE':'NEUTRAL');
+    const labels={
+      'LOVE':'أحبه جدًا',
+      'LIKE':'أحبه',
+      'NEUTRAL':'عادي',
+      'DISLIKE':'ما أفضل',
+      'NEVER_SHOW':'لا تعرضه',
+    };
+    IconData icon;
+    switch(level){
+      case 'LOVE':icon=Icons.favorite;break;
+      case 'LIKE':icon=Icons.thumb_up_alt_outlined;break;
+      case 'DISLIKE':icon=Icons.thumb_down_alt_outlined;break;
+      case 'NEVER_SHOW':icon=Icons.visibility_off_outlined;break;
+      default:icon=Icons.remove_circle_outline;
+    }
+    return Container(
+      margin:const EdgeInsets.only(bottom:8),
+      padding:const EdgeInsets.symmetric(horizontal:12,vertical:6),
+      decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE7EAE7))),
+      child:Row(children:[
+        Icon(icon,color:level=='NEVER_SHOW'?Colors.redAccent:WazenTheme.greenDark),
+        const SizedBox(width:10),
+        Expanded(child:Text(label,style:const TextStyle(fontWeight:FontWeight.w700))),
+        PopupMenuButton<String>(
+          initialValue:level,
+          onSelected:(v)=>setPreferenceLevel(key,v),
+          itemBuilder:(_)=>labels.entries.map((x)=>PopupMenuItem(value:x.key,child:Text(x.value))).toList(),
+          child:Container(
+            padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),
+            decoration:BoxDecoration(color:const Color(0xFFF4F6F2),borderRadius:BorderRadius.circular(10)),
+            child:Row(mainAxisSize:MainAxisSize.min,children:[
+              Text(labels[level]??level,style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700)),
+              const SizedBox(width:4),
+              const Icon(Icons.expand_more,size:16),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
 
   Widget _field(TextEditingController c,String label)=>TextField(controller:c,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:label));
 
