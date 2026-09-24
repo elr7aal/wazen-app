@@ -38,6 +38,58 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+
+  Future<void> addActivity() async {
+    final calories=TextEditingController();
+    final note=TextEditingController();
+    final result=await showDialog<Map<String,dynamic>>(
+      context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('سجل نشاطك'),
+        content:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Text(
+            'أدخل فقط السعرات المحسوبة من جهازك أو تمرينك. وازن يضيفها كـ Activity Credit إلى المتبقي اليوم.',
+            style:TextStyle(fontSize:12,color:Colors.black54,height:1.4),
+          ),
+          const SizedBox(height:12),
+          TextField(
+            controller:calories,
+            keyboardType:TextInputType.number,
+            decoration:const InputDecoration(labelText:'السعرات من النشاط'),
+          ),
+          const SizedBox(height:10),
+          TextField(
+            controller:note,
+            decoration:const InputDecoration(labelText:'ملاحظة اختيارية'),
+          ),
+        ]),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إلغاء')),
+          FilledButton(
+            onPressed:(){
+              final value=double.tryParse(calories.text.trim());
+              if(value==null||value<=0)return;
+              Navigator.pop(ctx,{'calories':value,'note':note.text.trim()});
+            },
+            child:const Text('إضافة'),
+          ),
+        ],
+      ),
+    );
+    calories.dispose();note.dispose();
+    if(result==null)return;
+    try{
+      final next=await WazenApi.instance.addActivityCredit(
+        result['calories'] as double,
+        source:'MANUAL',
+        note:(result['note'] as String).isEmpty?null:result['note'] as String,
+      );
+      if(mounted)setState(()=>state=next);
+    }catch(e){
+      if(mounted)setState(()=>error=e.toString());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = user?['profile'] as Map<String, dynamic>?;
@@ -84,13 +136,31 @@ class _HomeScreenState extends State<HomeScreen> {
             Card(child: Padding(padding: const EdgeInsets.all(22), child: Column(children: [
               WazenRing(remaining: state?.remainingCalories ?? target, target: target),
               const SizedBox(height: 20),
-              Row(children: [
-                Expanded(child: _metric('البروتين', '${state?.proteinGapG.toStringAsFixed(0) ?? '—'}g', 'باقي')),
-                const SizedBox(width: 10),
-                Expanded(child: _metric('الكربوهيدرات', '${state?.carbsRemainingG?.toStringAsFixed(0) ?? '—'}g', 'باقي')),
-                const SizedBox(width: 10),
-                Expanded(child: _metric('الدهون', '${state?.fatRemainingG?.toStringAsFixed(0) ?? '—'}g', 'باقي')),
-              ]),
+              GridView.count(
+                crossAxisCount:2,
+                shrinkWrap:true,
+                physics:const NeverScrollableScrollPhysics(),
+                mainAxisSpacing:10,
+                crossAxisSpacing:10,
+                childAspectRatio:1.7,
+                children:[
+                  _metric('البروتين', '${state?.proteinGapG.toStringAsFixed(0) ?? '—'}g', 'باقي'),
+                  _metric('الكربوهيدرات', '${state?.carbsRemainingG?.toStringAsFixed(0) ?? '—'}g', 'باقي'),
+                  _metric('الدهون', '${state?.fatRemainingG?.toStringAsFixed(0) ?? '—'}g', 'باقي'),
+                  _metric('الألياف', '${state?.fiberRemainingG?.toStringAsFixed(0) ?? '—'}g', 'باقي'),
+                ],
+              ),
+              const SizedBox(height:12),
+              Container(
+                padding:const EdgeInsets.symmetric(horizontal:12,vertical:10),
+                decoration:BoxDecoration(color:const Color(0xFFF6F7F3),borderRadius:BorderRadius.circular(14)),
+                child:Row(children:[
+                  const Icon(Icons.directions_walk_rounded,color:WazenTheme.greenDark),
+                  const SizedBox(width:8),
+                  Expanded(child:Text('Activity Credit: +${state?.activityCredit.toStringAsFixed(0)??'0'} kcal')),
+                  TextButton(onPressed:addActivity,child:const Text('أضف نشاط')),
+                ]),
+              ),
             ]))),
             const SizedBox(height: 18),
             FilledButton.icon(
