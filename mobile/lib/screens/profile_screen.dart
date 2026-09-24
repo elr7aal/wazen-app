@@ -53,12 +53,12 @@ class _ProfileScreenState extends State<ProfileScreen>{
     setState(()=>loading=true);
     try{
       final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights(),WazenApi.instance.goalHistory(limit:8),WazenApi.instance.preferenceSettings()]);
-      final u=Map<String,dynamic>.from(results[0]);
+      final u=Map<String,dynamic>.from(results[0] as Map);
       final p=Map<String,dynamic>.from(u['profile'] as Map);
       if(!mounted)return;
       setState((){
         user=u;
-        insights=Map<String,dynamic>.from(results[1]);
+        insights=Map<String,dynamic>.from(results[1] as Map);
         goalHistory=List<Map<String,dynamic>>.from(results[2] as List);
         explicitPreferences={
           for(final row in List<Map<String,dynamic>>.from(results[3] as List))
