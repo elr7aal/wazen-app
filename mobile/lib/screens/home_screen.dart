@@ -8,6 +8,7 @@ import 'auth_screen.dart';
 import 'food_log_screen.dart';
 import 'add_food_screen.dart';
 import 'profile_screen.dart';
+import 'plan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -59,6 +60,8 @@ class _HomeScreenState extends State<HomeScreen> {
             final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const CravingScreen()));
             if (changed == true && mounted) refresh();
           } else if (i == 3) {
+            await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const PlanScreen()));
+          } else if (i == 4) {
             await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
           }
         },
@@ -66,6 +69,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'الرئيسية'),
           NavigationDestination(icon: Icon(Icons.today_outlined), selectedIcon: Icon(Icons.today_rounded), label: 'يومي'),
           NavigationDestination(icon: Icon(Icons.restaurant_menu_outlined), selectedIcon: Icon(Icons.restaurant_menu_rounded), label: 'اكتشف'),
+          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded), label: 'خطتي'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'حسابي'),
         ],
       ),
