@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.db_models import (
     FoodItem, FoodLog, User, UserProfile, WeeklyPlanItem, WeightHistory
 )
+from app.services.health_limits import health_limit_rows, evaluate_food_health_limits
 
 MEAL_SPLIT = {
     'BREAKFAST': 0.25,
@@ -42,13 +43,21 @@ def _unsafe(food: FoodItem, severe: set[str]) -> bool:
 
 def eligible_foods(db: Session, profile: UserProfile) -> list[FoodItem]:
     severe = {x.upper() for x in profile.severe_allergens()}
+    limits = health_limit_rows(db, profile.user_id)
     rows = db.scalars(
         select(FoodItem).where(FoodItem.status == 'ACTIVE').order_by(FoodItem.vendor_name, FoodItem.name_en)
     ).all()
-    return [
-        f for f in rows
-        if f.nutrition and f.nutrition.calories is not None and f.nutrition.calories > 0 and not _unsafe(f, severe)
-    ]
+    eligible=[]
+    for f in rows:
+        if not f.nutrition or f.nutrition.calories is None or f.nutrition.calories <= 0:
+            continue
+        if _unsafe(f,severe):
+            continue
+        hard_health,_=evaluate_food_health_limits(f,limits)
+        if hard_health:
+            continue
+        eligible.append(f)
+    return eligible
 
 
 def _pick_food(pool: list[FoodItem], target: float, offset: int, used: set[str]) -> FoodItem | None:
