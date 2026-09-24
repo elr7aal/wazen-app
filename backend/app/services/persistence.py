@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models.db_models import User, UserProfile, FoodLog, RecommendationFeedback
+from app.models.db_models import User, UserProfile, FoodLog, RecommendationFeedback, ActivityLog
 from app.models.schemas import DailyStateRequest, RecommendationRequest
 from app.services.recommendation import recommend_now
 from app.services.preferences import preference_context
@@ -25,8 +25,19 @@ def today_totals(db: Session, user_id: str):
         'protein_g': round(sum(x.protein_g for x in rows),1),
         'carbs_g': round(sum(x.carbs_g for x in rows),1),
         'fat_g': round(sum(x.fat_g for x in rows),1),
+        'fiber_g': round(sum(x.fiber_g for x in rows),1),
         'sodium_mg': round(sum(x.sodium_mg for x in rows),1),
     }
+
+
+def today_activity_credit(db: Session, user_id: str) -> float:
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = db.scalars(select(ActivityLog).where(
+        ActivityLog.user_id == user_id,
+        ActivityLog.logged_at >= start
+    )).all()
+    return round(sum(x.calories_credit for x in rows),1)
 
 
 def build_daily_request(db: Session, user: User) -> DailyStateRequest:
@@ -35,13 +46,15 @@ def build_daily_request(db: Session, user: User) -> DailyStateRequest:
     return DailyStateRequest(
         target_calories=p.target_calories,
         consumed_calories=t['calories'],
-        activity_credit=0,
+        activity_credit=today_activity_credit(db, user.id),
         target_protein_g=p.target_protein_g,
         consumed_protein_g=t['protein_g'],
         target_carbs_g=p.target_carbs_g,
         consumed_carbs_g=t['carbs_g'] if p.target_carbs_g is not None else None,
         target_fat_g=p.target_fat_g,
         consumed_fat_g=t['fat_g'] if p.target_fat_g is not None else None,
+        target_fiber_g=p.target_fiber_g,
+        consumed_fiber_g=t['fiber_g'] if p.target_fiber_g is not None else None,
         sodium_max_mg=p.sodium_max_mg,
         consumed_sodium_mg=t['sodium_mg'] if p.sodium_max_mg is not None else None,
     )
@@ -90,6 +103,7 @@ def log_catalog_food(db: Session, user: User, food, meal_type: str, quantity: fl
         protein_g=(n.protein_g or 0.0) * q,
         carbs_g=(n.carbs_g or 0.0) * q,
         fat_g=(n.fat_g or 0.0) * q,
+        fiber_g=(n.fiber_g or 0.0) * q,
         sodium_mg=(n.sodium_mg or 0.0) * q,
     )
     db.add(row)
@@ -101,12 +115,12 @@ def log_catalog_food(db: Session, user: User, food, meal_type: str, quantity: fl
 def log_nutrition_snapshot(
     db: Session, user: User, food_id: str | None, food_name: str, meal_type: str,
     calories: float, protein_g: float = 0.0, carbs_g: float = 0.0, fat_g: float = 0.0,
-    sodium_mg: float = 0.0, entry_method: str = 'MODIFIED_RECOMMENDATION'
+    fiber_g: float = 0.0, sodium_mg: float = 0.0, entry_method: str = 'MODIFIED_RECOMMENDATION'
 ):
     row = FoodLog(
         user_id=user.id, food_id=food_id, food_name=food_name, meal_type=meal_type,
         entry_method=entry_method, calories=calories, protein_g=protein_g,
-        carbs_g=carbs_g, fat_g=fat_g, sodium_mg=sodium_mg,
+        carbs_g=carbs_g, fat_g=fat_g, fiber_g=fiber_g, sodium_mg=sodium_mg,
     )
     db.add(row)
     db.commit()
