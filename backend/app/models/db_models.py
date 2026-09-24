@@ -38,6 +38,7 @@ class UserProfile(Base):
     target_protein_g: Mapped[float] = mapped_column(Float, default=100)
     target_carbs_g: Mapped[float | None] = mapped_column(Float, nullable=True)
     target_fat_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_fiber_g: Mapped[float | None] = mapped_column(Float, nullable=True, default=30)
     sodium_max_mg: Mapped[float | None] = mapped_column(Float, nullable=True)
     severe_allergens_csv: Mapped[str] = mapped_column(Text, default='')
     food_preferences_csv: Mapped[str] = mapped_column(Text, default='')
@@ -148,6 +149,7 @@ class FoodLog(Base):
     protein_g: Mapped[float] = mapped_column(Float, default=0)
     carbs_g: Mapped[float] = mapped_column(Float, default=0)
     fat_g: Mapped[float] = mapped_column(Float, default=0)
+    fiber_g: Mapped[float] = mapped_column(Float, default=0)
     sodium_mg: Mapped[float] = mapped_column(Float, default=0)
     logged_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
     user: Mapped[User] = relationship(back_populates='logs')
@@ -277,3 +279,13 @@ class FavoriteMeal(Base):
     sodium_mg: Mapped[float] = mapped_column(Float, default=0)
     source_log_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class ActivityLog(Base):
+    __tablename__ = 'activity_logs'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    calories_credit: Mapped[float] = mapped_column(Float, default=0)
+    source: Mapped[str] = mapped_column(String(32), default='MANUAL')
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logged_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
