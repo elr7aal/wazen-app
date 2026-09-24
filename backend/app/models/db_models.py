@@ -276,6 +276,7 @@ class FavoriteMeal(Base):
     protein_g: Mapped[float] = mapped_column(Float, default=0)
     carbs_g: Mapped[float] = mapped_column(Float, default=0)
     fat_g: Mapped[float] = mapped_column(Float, default=0)
+    fiber_g: Mapped[float] = mapped_column(Float, default=0)
     sodium_mg: Mapped[float] = mapped_column(Float, default=0)
     source_log_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
