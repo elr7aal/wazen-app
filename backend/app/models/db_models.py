@@ -180,3 +180,27 @@ class AdminAuditLog(Base):
     actor: Mapped[str] = mapped_column(String(120), default='admin')
     details_json: Mapped[str] = mapped_column(Text, default='{}')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class WeeklyPlanItem(Base):
+    __tablename__ = 'weekly_plan_items'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    plan_date: Mapped[date] = mapped_column(Date, index=True)
+    meal_type: Mapped[str] = mapped_column(String(32), index=True)
+    food_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    food_name: Mapped[str] = mapped_column(String(255))
+    calories: Mapped[float] = mapped_column(Float, default=0)
+    protein_g: Mapped[float] = mapped_column(Float, default=0)
+    price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String(8), default='AED')
+    status: Mapped[str] = mapped_column(String(24), default='PLANNED')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+
+class WeightHistory(Base):
+    __tablename__ = 'weight_history'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    weight_kg: Mapped[float] = mapped_column(Float)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
