@@ -41,7 +41,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.0.0')
+app = FastAPI(title='WAZEN API', version='1.1.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +59,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.0.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.1.0'})
 
 
 # -------- Authentication --------
@@ -372,10 +372,34 @@ def nutrition_today(user: User = Depends(get_current_user), db: Session = Depend
 
 # -------- Unified Food Catalog --------
 @app.get('/api/v1/foods/search')
-def food_search(q: Optional[str] = None, vendor: Optional[str] = None, category: Optional[str] = None,
-                max_calories: Optional[float] = None, min_protein_g: Optional[float] = None, limit: int = 25,
-                db: Session = Depends(get_db)):
-    rows = query_foods(db, vendor=vendor, category=category, q=q, max_calories=max_calories, min_protein_g=min_protein_g, limit=limit)
+def food_search(
+    q: Optional[str] = None,
+    vendor: Optional[str] = None,
+    brand: Optional[str] = None,
+    category: Optional[str] = None,
+    food_type: Optional[str] = None,
+    max_calories: Optional[float] = None,
+    min_protein_g: Optional[float] = None,
+    max_sodium_mg: Optional[float] = None,
+    min_fiber_g: Optional[float] = None,
+    max_price: Optional[float] = None,
+    limit: int = 25,
+    db: Session = Depends(get_db),
+):
+    rows = query_foods(
+        db,
+        vendor=vendor,
+        brand=brand,
+        category=category,
+        food_type=food_type,
+        q=q,
+        max_calories=max_calories,
+        min_protein_g=min_protein_g,
+        max_sodium_mg=max_sodium_mg,
+        min_fiber_g=min_fiber_g,
+        max_price=max_price,
+        limit=limit,
+    )
     return envelope({'items':[serialize_food(x) for x in rows], 'count':len(rows)})
 
 
