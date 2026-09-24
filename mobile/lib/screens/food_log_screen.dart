@@ -7,6 +7,7 @@ import 'home_screen.dart';
 import 'craving_screen.dart';
 import 'add_food_screen.dart';
 import 'profile_screen.dart';
+import 'plan_screen.dart';
 
 class FoodLogScreen extends StatefulWidget {
   const FoodLogScreen({super.key});
@@ -95,6 +96,8 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
             final changed=await Navigator.push<bool>(context,MaterialPageRoute(builder:(_)=>const CravingScreen()));
             if(changed==true&&mounted)load();
           }else if(i==3){
+            Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const PlanScreen()));
+          }else if(i==4){
             Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const ProfileScreen()));
           }
         },
@@ -102,6 +105,7 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
           NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home_rounded),label:'الرئيسية'),
           NavigationDestination(icon:Icon(Icons.today_outlined),selectedIcon:Icon(Icons.today_rounded),label:'يومي'),
           NavigationDestination(icon:Icon(Icons.restaurant_menu_outlined),selectedIcon:Icon(Icons.restaurant_menu_rounded),label:'اكتشف'),
+          NavigationDestination(icon:Icon(Icons.calendar_month_outlined),selectedIcon:Icon(Icons.calendar_month_rounded),label:'خطتي'),
           NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'حسابي'),
         ],
       ),
