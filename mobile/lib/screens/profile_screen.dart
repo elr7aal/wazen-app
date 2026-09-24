@@ -7,6 +7,7 @@ import 'food_log_screen.dart';
 import 'craving_screen.dart';
 import 'auth_screen.dart';
 import 'plan_screen.dart';
+import 'health_limits_screen.dart';
 
 class ProfileScreen extends StatefulWidget{
   const ProfileScreen({super.key});
@@ -187,6 +188,12 @@ class _ProfileScreenState extends State<ProfileScreen>{
           )).toList()),
           const SizedBox(height:8),
           const Text('هذه فقط هي التي تعمل كاستبعاد تلقائي. لا نستخدم التفضيلات بدل قواعد السلامة.',style:TextStyle(color:Colors.black54)),
+          const SizedBox(height:12),
+          OutlinedButton.icon(
+            onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const HealthLimitsScreen())),
+            icon:const Icon(Icons.health_and_safety_outlined),
+            label:const Text('إدارة الحدود الصحية'),
+          ),
         ]),
         const SizedBox(height:16),
         _section('ذوقي',[
