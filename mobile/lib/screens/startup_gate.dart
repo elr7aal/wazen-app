@@ -22,7 +22,15 @@ class _StartupGateState extends State<StartupGate>{
     try{
       final complete=await WazenApi.instance.onboardingStatus();
       if(mounted)setState(()=>page=complete?const HomeScreen():const OnboardingScreen());
-    }catch(_){
+    }catch(e){
+      final refreshed=await WazenApi.instance.refreshSession();
+      if(refreshed){
+        try{
+          final complete=await WazenApi.instance.onboardingStatus();
+          if(mounted)setState(()=>page=complete?const HomeScreen():const OnboardingScreen());
+          return;
+        }catch(_){}
+      }
       if(mounted)setState(()=>page=const AuthScreen());
     }
   }
