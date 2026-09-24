@@ -1,14 +1,15 @@
 import re
 import os
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Depends
+import secrets
+from typing import Optional, Any, Literal
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import Base, engine, get_db, SessionLocal
-from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback
+from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback, AdminAuditLog
 from app.models.schemas import (
     DailyStateRequest, RecommendationRequest, MakeItFitRequest, RebalanceRequest,
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
@@ -25,13 +26,14 @@ from app.services.catalog import ensure_catalog_seeded, query_foods, serialize_f
 from app.services.vision import analyze_food_image
 from app.services.onboarding import calculate_targets
 from app.services.profile_insights import profile_insights
+from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='0.4.0')
+app = FastAPI(title='WAZEN API', version='0.5.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,7 +51,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.4.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.5.0'})
 
 
 # -------- Authentication --------
@@ -616,4 +618,101 @@ def analyze_food_image_endpoint(req: ImageFoodAnalyzeRequest, user: User = Depen
         'vision_result':analysis.get('result'),
         'confidence':'AI_ESTIMATE',
         'note':'Image nutrition is an AI estimate. Review portions and values before saving.'
+    })
+
+
+
+# -------- Admin Data Operations (v16) --------
+class AdminReviewRequest(BaseModel):
+    action: Literal['APPROVE', 'REJECT', 'FLAG']
+    note: Optional[str] = None
+
+
+class AdminImportRequest(BaseModel):
+    format: Literal['JSON', 'CSV'] = 'JSON'
+    dry_run: bool = True
+    records: list[dict[str, Any]] = []
+    csv_text: Optional[str] = None
+
+
+def require_admin(
+    x_wazen_admin_key: Optional[str] = Header(default=None),
+    x_wazen_admin_actor: Optional[str] = Header(default=None),
+):
+    expected = os.getenv('WAZEN_ADMIN_KEY')
+    if not expected:
+        raise HTTPException(status_code=503, detail='Admin API is not configured')
+    if not x_wazen_admin_key or not secrets.compare_digest(x_wazen_admin_key, expected):
+        raise HTTPException(status_code=401, detail='Invalid admin key')
+    return (x_wazen_admin_actor or 'admin').strip()[:120] or 'admin'
+
+
+@app.get('/api/v1/admin/foods')
+def admin_foods(
+    q: Optional[str] = None,
+    review_status: Optional[str] = None,
+    limit: int = 50,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    items = list_admin_foods(db, q=q, review_status=review_status, limit=limit)
+    return envelope({'items': items, 'count': len(items)})
+
+
+@app.post('/api/v1/admin/foods/{food_id}/review')
+def admin_review_food(
+    food_id: str,
+    req: AdminReviewRequest,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        review = set_review(db, food_id, req.action, req.note, actor)
+    except ValueError as exc:
+        if str(exc) == 'FOOD_NOT_FOUND':
+            raise HTTPException(status_code=404, detail='Food item not found')
+        raise HTTPException(status_code=422, detail='Invalid review action')
+    return envelope({
+        'food_id': food_id,
+        'review_status': review.review_status,
+        'note': review.note,
+        'reviewed_by': review.reviewed_by,
+        'reviewed_at': review.reviewed_at.isoformat() if review.reviewed_at else None,
+    })
+
+
+@app.post('/api/v1/admin/import/foods')
+def admin_import_foods(
+    req: AdminImportRequest,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        rows = parse_import_payload(req.format, req.records, req.csv_text)
+    except ValueError:
+        raise HTTPException(status_code=422, detail='Unsupported import format')
+    summary, checked = import_foods(db, rows, req.dry_run, actor)
+    return envelope({'summary': summary, 'rows': checked})
+
+
+@app.get('/api/v1/admin/audit')
+def admin_audit(
+    limit: int = 100,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    rows = db.scalars(
+        select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc()).limit(max(1, min(limit, 500)))
+    ).all()
+    return envelope({
+        'items': [{
+            'id': x.id,
+            'action': x.action,
+            'entity_type': x.entity_type,
+            'entity_id': x.entity_id,
+            'actor': x.actor,
+            'details_json': x.details_json,
+            'created_at': x.created_at.isoformat(),
+        } for x in rows],
+        'count': len(rows),
     })
