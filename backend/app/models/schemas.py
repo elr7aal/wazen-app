@@ -41,6 +41,7 @@ class RecommendationRequest(BaseModel):
     food_preference_levels: Dict[str, str] = {}
     never_show_terms: List[str] = []
     never_show_food_ids: List[str] = []
+    health_limits: List[Dict[str, object]] = []
 
 
 class ModificationContext(BaseModel):
