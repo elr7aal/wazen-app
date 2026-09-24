@@ -261,3 +261,19 @@ class HealthLimit(Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+
+class FavoriteMeal(Base):
+    __tablename__ = 'favorite_meals'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    food_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    food_name: Mapped[str] = mapped_column(String(255))
+    default_meal_type: Mapped[str] = mapped_column(String(32), default='SNACK')
+    calories: Mapped[float] = mapped_column(Float, default=0)
+    protein_g: Mapped[float] = mapped_column(Float, default=0)
+    carbs_g: Mapped[float] = mapped_column(Float, default=0)
+    fat_g: Mapped[float] = mapped_column(Float, default=0)
+    sodium_mg: Mapped[float] = mapped_column(Float, default=0)
+    source_log_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
