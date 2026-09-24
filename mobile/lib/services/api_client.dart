@@ -263,10 +263,19 @@ class WazenApi {
     return FoodDetail.fromJson(Map<String,dynamic>.from(data['item'] as Map));
   }
 
+  Future<Map<String,dynamic>> parseFoodTextDetailed(String text,{String mealType='SNACK'}) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/food-log/parse-text'),
+      headers:_headers,
+      body:jsonEncode({'text':text,'meal_type':mealType}),
+    );
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
   Future<List<FoodDetail>> parseFoodText(String text,{String mealType='SNACK'}) async {
-    final r=await http.post(Uri.parse('$baseUrl/food-log/parse-text'),headers:_headers,body:jsonEncode({'text':text,'meal_type':mealType}));
-    final data=Map<String,dynamic>.from(_unwrap(r));
-    return ((data['candidates'] as List?)??const []).map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
+    final data=await parseFoodTextDetailed(text,mealType:mealType);
+    return ((data['candidates'] as List?)??const [])
+      .map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
   }
 
   Future<Map<String,dynamic>> analyzeFoodImage(String imageBase64,{String? caption,String mealType='SNACK'}) async {
