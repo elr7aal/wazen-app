@@ -47,6 +47,7 @@ def list_preferences(db: Session, user_id: str):
 def preference_context(db: Session, user_id: str):
     rows=db.scalars(select(UserPreferenceSetting).where(UserPreferenceSetting.user_id==user_id)).all()
     levels={}
+    food_levels={}
     never_terms=[]
     never_foods=[]
     for row in rows:
@@ -57,8 +58,11 @@ def preference_context(db: Session, user_id: str):
                 never_terms.append(row.target_value)
         elif row.target_type=='TERM':
             levels[row.target_value]=row.level
+        elif row.target_type=='FOOD':
+            food_levels[row.target_value]=row.level
     return {
         'preference_levels':levels,
+        'food_preference_levels':food_levels,
         'never_show_terms':never_terms,
         'never_show_food_ids':never_foods,
     }
