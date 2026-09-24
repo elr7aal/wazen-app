@@ -5,6 +5,7 @@ from app.models.db_models import User, UserProfile, FoodLog, RecommendationFeedb
 from app.models.schemas import DailyStateRequest, RecommendationRequest
 from app.services.recommendation import recommend_now
 from app.services.preferences import preference_context
+from app.services.health_limits import health_limit_rows, serialize_health_limit
 
 
 def ensure_profile(db: Session, user: User) -> UserProfile:
@@ -69,6 +70,7 @@ def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_
         food_preference_levels=pref_ctx['food_preference_levels'],
         never_show_terms=pref_ctx['never_show_terms'],
         never_show_food_ids=pref_ctx['never_show_food_ids'],
+        health_limits=[serialize_health_limit(x) for x in health_limit_rows(db,user.id)],
     )
     return recommend_now(db, req)
 
