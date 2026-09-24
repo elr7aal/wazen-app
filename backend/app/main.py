@@ -16,7 +16,7 @@ from app.models.schemas import (
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
     UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
     RefreshTokenRequest, LogoutRequest, ForgotPasswordRequest, ResetPasswordRequest,
-    PreferenceSettingRequest,
+    PreferenceSettingRequest, HealthLimitRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -34,13 +34,14 @@ from app.services.plan_progress import get_or_generate_week, generate_week, reba
 from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset
 from app.services.goal_history import add_goal_snapshot, list_goal_history
 from app.services.preferences import set_preference, list_preferences
+from app.services.health_limits import set_health_limit, list_health_limits
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='0.9.0')
+app = FastAPI(title='WAZEN API', version='1.0.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,7 +59,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.9.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.0.0'})
 
 
 # -------- Authentication --------
@@ -284,6 +285,25 @@ def put_preference(
         item=set_preference(db,user.id,req.target_type,req.target_value,req.level)
     except ValueError:
         raise HTTPException(status_code=422,detail='Invalid preference')
+    return envelope(item)
+
+
+@app.get('/api/v1/health-limits')
+def get_health_limits(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items=list_health_limits(db,user.id)
+    return envelope({'items':items,'count':len(items)})
+
+
+@app.put('/api/v1/health-limits')
+def put_health_limit(
+    req: HealthLimitRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    item=set_health_limit(db,user.id,req)
     return envelope(item)
 
 
