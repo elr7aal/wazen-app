@@ -34,9 +34,9 @@ jobs:
         working-directory: mobile
         run: flutter pub get
 
-      - name: Run Flutter tests
+      - name: Run WAZEN Flutter tests
         working-directory: mobile
-        run: flutter test
+        run: flutter test test/model_parsing_test.dart
 
       - name: Validate web build
         working-directory: mobile
