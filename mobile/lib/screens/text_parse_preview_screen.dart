@@ -5,10 +5,14 @@ import '../services/api_client.dart';
 class TextParsePreviewScreen extends StatefulWidget {
   final Map<String,dynamic> parsed;
   final String mealType;
+  final String title;
+  final String intro;
   const TextParsePreviewScreen({
     super.key,
     required this.parsed,
     required this.mealType,
+    this.title='راجع اللي فهمناه',
+    this.intro='ولا عنصر ينحفظ تلقائيًا. راجع المطابقة والكمية لكل جزء قبل الإضافة.',
   });
 
   @override
@@ -24,6 +28,7 @@ class _ParsedItemState {
   int selectedIndex;
   double quantity;
   bool include;
+  final bool requiresConfirmation;
 
   _ParsedItemState({
     required this.rawText,
@@ -34,6 +39,7 @@ class _ParsedItemState {
     required this.selectedIndex,
     required this.quantity,
     required this.include,
+    required this.requiresConfirmation,
   });
 }
 
@@ -50,6 +56,7 @@ class _TextParsePreviewScreenState extends State<TextParsePreviewScreen>{
       final m=Map<String,dynamic>.from(raw as Map);
       final candidates=((m['candidates'] as List?)??const [])
         .map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
+      final requiresConfirmation=m['requires_confirmation']==true;
       return _ParsedItemState(
         rawText:(m['raw_text']??'').toString(),
         queryText:(m['query_text']??'').toString(),
@@ -58,7 +65,8 @@ class _TextParsePreviewScreenState extends State<TextParsePreviewScreen>{
         candidates:candidates,
         selectedIndex:0,
         quantity:(m['estimated_quantity'] as num? ?? 1).toDouble().clamp(.25,20),
-        include:candidates.isNotEmpty,
+        include:candidates.isNotEmpty&&!requiresConfirmation,
+        requiresConfirmation:requiresConfirmation,
       );
     }).toList();
   }
@@ -98,7 +106,7 @@ class _TextParsePreviewScreenState extends State<TextParsePreviewScreen>{
 
   @override
   Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('راجع اللي فهمناه')),
+    appBar:AppBar(title:Text(widget.title)),
     bottomNavigationBar:SafeArea(
       child:Padding(
         padding:const EdgeInsets.all(16),
@@ -112,9 +120,9 @@ class _TextParsePreviewScreenState extends State<TextParsePreviewScreen>{
     body:ListView(
       padding:const EdgeInsets.fromLTRB(18,12,18,28),
       children:[
-        const Text(
-          'ولا عنصر ينحفظ تلقائيًا. راجع المطابقة والكمية لكل جزء من كلامك قبل الإضافة.',
-          style:TextStyle(color:Colors.black54,height:1.5),
+        Text(
+          widget.intro,
+          style:const TextStyle(color:Colors.black54,height:1.5),
         ),
         if(error!=null)Padding(
           padding:const EdgeInsets.only(top:10),
@@ -148,6 +156,21 @@ class _TextParsePreviewScreenState extends State<TextParsePreviewScreen>{
               ),
             ])),
           ]),
+          if(item.requiresConfirmation&&hasCandidates)...[
+            const SizedBox(height:8),
+            Container(
+              width:double.infinity,
+              padding:const EdgeInsets.all(10),
+              decoration:BoxDecoration(
+                color:const Color(0xFFFFF1E8),
+                borderRadius:BorderRadius.circular(10),
+              ),
+              child:const Text(
+                'الثقة منخفضة: هذا العنصر غير محدد للحفظ تلقائيًا. فعّل المربع فقط إذا راجعت المطابقة والكمية.',
+                style:TextStyle(fontSize:12,height:1.4),
+              ),
+            ),
+          ],
           const SizedBox(height:10),
           if(!hasCandidates)
             Container(
