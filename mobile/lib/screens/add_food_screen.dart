@@ -18,18 +18,24 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
   final search=TextEditingController();
   final natural=TextEditingController();
   final caption=TextEditingController();
+  final maxCalories=TextEditingController();
+  final minProtein=TextEditingController();
+  final maxSodium=TextEditingController();
+  final maxPrice=TextEditingController();
   final stt.SpeechToText speech=stt.SpeechToText();
   bool listening=false;
   Map<String,dynamic>? visionResult;
   String meal='SNACK';
   bool loading=false;
+  bool showFilters=false;
+  String searchType='ALL';
   String? message;
   List<FoodDetail> results=const[];
 
   static const meals={'BREAKFAST':'فطور','LUNCH':'غداء','DINNER':'عشاء','SNACK':'سناك'};
 
   @override void initState(){super.initState();tabs=TabController(length:4,vsync:this);}
-  @override void dispose(){tabs.dispose();search.dispose();natural.dispose();caption.dispose();super.dispose();}
+  @override void dispose(){tabs.dispose();search.dispose();natural.dispose();caption.dispose();maxCalories.dispose();minProtein.dispose();maxSodium.dispose();maxPrice.dispose();super.dispose();}
 
   Future<void> showResults(List<FoodDetail> x,String msg)async{
     setState(()=>results=x);
@@ -37,11 +43,35 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
     setState(()=>message=null);
   }
 
+  double? _num(TextEditingController c)=>double.tryParse(c.text.trim());
+
   Future<void> doSearch()async{
-    if(search.text.trim().isEmpty)return;
+    if(search.text.trim().isEmpty&&
+       maxCalories.text.trim().isEmpty&&
+       minProtein.text.trim().isEmpty&&
+       maxSodium.text.trim().isEmpty&&
+       maxPrice.text.trim().isEmpty&&
+       searchType=='ALL')return;
     setState(()=>loading=true);
-    try{await showResults(await WazenApi.instance.searchFoods(search.text.trim()),'ما حصلت نتيجة مطابقة في الكتالوج الحالي.');}
-    finally{if(mounted)setState(()=>loading=false);}
+    try{
+      await showResults(
+        await WazenApi.instance.searchFoods(
+          search.text.trim(),
+          foodType:searchType=='ALL'?null:searchType,
+          maxCalories:_num(maxCalories),
+          minProteinG:_num(minProtein),
+          maxSodiumMg:_num(maxSodium),
+          maxPrice:_num(maxPrice),
+          limit:50,
+        ),
+        'ما حصلت نتيجة مطابقة للفلاتر الحالية.'
+      );
+    }finally{if(mounted)setState(()=>loading=false);}
+  }
+
+  void clearFilters(){
+    maxCalories.clear();minProtein.clear();maxSodium.clear();maxPrice.clear();
+    setState(()=>searchType='ALL');
   }
 
   Future<void> doText()async{
@@ -123,7 +153,7 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
       )),
       if(loading)const LinearProgressIndicator(minHeight:2),
       Expanded(child:TabBarView(controller:tabs,children:[
-        _input(search,'مثال: Zinger أو Big Mac','ابحث',doSearch),
+        _searchTab(),
         ListView(padding:const EdgeInsets.all(18),children:[
           TextField(controller:natural,minLines:2,maxLines:4,decoration:const InputDecoration(hintText:'مثال: أكلت نص دجاجة مع رز ولبن')),
           const SizedBox(height:12),
@@ -184,6 +214,83 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
         ));},
       )),
     ]),
+  );
+
+
+  Widget _searchTab()=>ListView(
+    padding:const EdgeInsets.all(18),
+    children:[
+      TextField(
+        controller:search,
+        textInputAction:TextInputAction.search,
+        onSubmitted:(_)=>doSearch(),
+        decoration:const InputDecoration(
+          hintText:'ابحث عن أكلة، منتج أو مطعم',
+          prefixIcon:Icon(Icons.search),
+        ),
+      ),
+      const SizedBox(height:12),
+      SegmentedButton<String>(
+        segments:const[
+          ButtonSegment(value:'ALL',label:Text('الكل')),
+          ButtonSegment(value:'RESTAURANT',label:Text('مطاعم')),
+          ButtonSegment(value:'GROCERY',label:Text('منتجات')),
+        ],
+        selected:{searchType},
+        onSelectionChanged:(s)=>setState(()=>searchType=s.first),
+      ),
+      const SizedBox(height:10),
+      TextButton.icon(
+        onPressed:()=>setState(()=>showFilters=!showFilters),
+        icon:Icon(showFilters?Icons.tune:Icons.tune_outlined),
+        label:Text(showFilters?'إخفاء الفلاتر':'فلاتر إضافية'),
+      ),
+      if(showFilters)...[
+        const SizedBox(height:4),
+        Row(children:[
+          Expanded(child:TextField(
+            controller:maxCalories,
+            keyboardType:TextInputType.number,
+            decoration:const InputDecoration(labelText:'أقصى سعرات'),
+          )),
+          const SizedBox(width:10),
+          Expanded(child:TextField(
+            controller:minProtein,
+            keyboardType:TextInputType.number,
+            decoration:const InputDecoration(labelText:'أقل بروتين g'),
+          )),
+        ]),
+        const SizedBox(height:10),
+        Row(children:[
+          Expanded(child:TextField(
+            controller:maxSodium,
+            keyboardType:TextInputType.number,
+            decoration:const InputDecoration(labelText:'أقصى صوديوم mg'),
+          )),
+          const SizedBox(width:10),
+          Expanded(child:TextField(
+            controller:maxPrice,
+            keyboardType:TextInputType.number,
+            decoration:const InputDecoration(labelText:'أقصى سعر AED'),
+          )),
+        ]),
+        Align(
+          alignment:AlignmentDirectional.centerEnd,
+          child:TextButton(onPressed:clearFilters,child:const Text('مسح الفلاتر')),
+        ),
+      ],
+      const SizedBox(height:12),
+      FilledButton.icon(
+        onPressed:loading?null:doSearch,
+        icon:const Icon(Icons.search),
+        label:const Text('ابحث'),
+      ),
+      const SizedBox(height:8),
+      const Text(
+        'يدعم البحث صيغًا متقاربة مثل برغر / برجر / burger.',
+        style:TextStyle(fontSize:12,color:Colors.black54),
+      ),
+    ],
   );
 
   Widget _input(TextEditingController c,String hint,String label,Future<void> Function() action)=>ListView(
