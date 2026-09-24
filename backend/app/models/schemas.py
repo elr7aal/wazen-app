@@ -187,3 +187,21 @@ class PlanRecalculateRequest(BaseModel):
     target_weight_kg: Optional[float] = Field(default=None, ge=35, le=300)
     goal_type: Optional[Literal['LOSE','MAINTAIN','GAIN']] = None
     activity_level: Optional[Literal['SEDENTARY','LIGHT','MODERATE','ACTIVE','VERY_ACTIVE']] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=20)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str = Field(min_length=20)
+    all_sessions: bool = False
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=20)
+    new_password: str = Field(min_length=8)
