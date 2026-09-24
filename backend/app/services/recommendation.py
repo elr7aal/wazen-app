@@ -49,8 +49,15 @@ def _preference_score(item, req):
     pref_hits=sum(1 for x in req.preferred_terms if _term_matches(x,text))
     dislike_hits=sum(1 for x in req.disliked_terms if _term_matches(x,text))
     behavior=float(req.behavior_scores.get(item.id,0.0))
-    score=80.0 + min(15.0,pref_hits*7.5) - min(25.0,dislike_hits*12.5) + max(-15.0,min(12.0,behavior))
-    return max(0.0,min(100.0,score)), pref_hits, dislike_hits, behavior
+    explicit_delta=0.0
+    explicit_hits=[]
+    weights={'LOVE':15.0,'LIKE':7.5,'NEUTRAL':0.0,'DISLIKE':-15.0}
+    for term,level in req.preference_levels.items():
+        if _term_matches(term,text):
+            explicit_delta += weights.get(level.upper(),0.0)
+            explicit_hits.append((term,level.upper()))
+    score=80.0 + min(15.0,pref_hits*7.5) - min(25.0,dislike_hits*12.5) + explicit_delta + max(-15.0,min(12.0,behavior))
+    return max(0.0,min(100.0,score)), pref_hits, dislike_hits, behavior, explicit_hits
 
 
 def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
@@ -68,6 +75,9 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
         warning_allergens={a.allergen_code for a in item.allergens if a.relationship_type != 'CONTAINS'}
         if contains_allergens.intersection(severe):
             excluded.append({'food_id':item.id,'reason':'SEVERE_ALLERGY'}); continue
+        text=_food_text(item)
+        if item.id in set(req.never_show_food_ids) or any(_term_matches(term,text) for term in req.never_show_terms):
+            excluded.append({'food_id':item.id,'reason':'USER_NEVER_SHOW'}); continue
         if item.availability_status in {'UNAVAILABLE','OUT_OF_STOCK'}:
             excluded.append({'food_id':item.id,'reason':'UNAVAILABLE'}); continue
 
@@ -79,7 +89,7 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
         if warning_allergens.intersection(severe): warnings.append('ALLERGEN_CROSS_CONTACT_WARNING')
         if daily.sodium_remaining_mg is not None and n.sodium_mg is not None and sodium>daily.sodium_remaining_mg:
             health_score=70.0; warnings.append('HIGH_SODIUM_FOR_REMAINING_DAY')
-        preference_score, pref_hits, dislike_hits, behavior_score = _preference_score(item, req)
+        preference_score, pref_hits, dislike_hits, behavior_score, explicit_hits = _preference_score(item, req)
         price_score=70.0
         if req.budget_max is not None and item.price is not None:
             price_score=100.0 if item.price<=req.budget_max else max(0.0,100.0-(item.price-req.budget_max)/max(1,req.budget_max)*100)
@@ -93,6 +103,9 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
         reasons=[]
         if pref_hits>0: reasons.append('Matches your stated food preferences')
         if behavior_score>=4: reasons.append('Similar to foods you often choose')
+        if any(level=='LOVE' for _,level in explicit_hits): reasons.append('Matches something you marked LOVE')
+        elif any(level=='LIKE' for _,level in explicit_hits): reasons.append('Matches something you marked LIKE')
+        if any(level=='DISLIKE' for _,level in explicit_hits): reasons.append('Matches something you marked DISLIKE')
         if dislike_hits>0: reasons.append('Contains a food type you usually avoid')
         reasons.append('Fits the requested calorie context' if decision=='ELIGIBLE' else 'Close to the requested calorie limit' if decision=='NEAR_MATCH' else 'Above the requested calorie context; modification may help')
         if protein>=daily.protein_gap_g and daily.protein_gap_g>0: reasons.append('Covers the remaining protein gap')
