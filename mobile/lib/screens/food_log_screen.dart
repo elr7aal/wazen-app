@@ -16,6 +16,7 @@ class FoodLogScreen extends StatefulWidget {
 
 class _FoodLogScreenState extends State<FoodLogScreen>{
   FoodLogDay? day;
+  List<Map<String,dynamic>> favorites=[];
   bool loading=true;
   String? error;
 
@@ -28,8 +29,16 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
 
   Future<void> load() async{
     setState((){loading=true;error=null;});
-    try{final d=await WazenApi.instance.foodLogToday();if(mounted)setState(()=>day=d);}
-    catch(e){if(mounted)setState(()=>error=e.toString());}
+    try{
+      final results=await Future.wait([
+        WazenApi.instance.foodLogToday(),
+        WazenApi.instance.favoriteMeals(),
+      ]);
+      if(mounted)setState((){
+        day=results[0] as FoodLogDay;
+        favorites=List<Map<String,dynamic>>.from(results[1] as List);
+      });
+    }catch(e){if(mounted)setState(()=>error=e.toString());}
     finally{if(mounted)setState(()=>loading=false);}
   }
 
@@ -83,6 +92,42 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
     }catch(e){if(mounted)setState(()=>error=e.toString());}
   }
 
+
+  Future<void> duplicate(FoodLogItem item) async{
+    try{
+      final d=await WazenApi.instance.duplicateFoodLog(item.id);
+      if(mounted){
+        setState(()=>day=d);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم نسخ الوجبة.')));
+      }
+    }catch(e){if(mounted)setState(()=>error=e.toString());}
+  }
+
+  Future<void> favorite(FoodLogItem item) async{
+    try{
+      final result=await WazenApi.instance.favoriteFoodLog(item.id);
+      if(!mounted)return;
+      final created=result['created']==true;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text(created?'تم حفظ الوجبة في المفضلة.':'هذه الوجبة موجودة في المفضلة بالفعل.'),
+      ));
+      await load();
+    }catch(e){if(mounted)setState(()=>error=e.toString());}
+  }
+
+  Future<void> logFavorite(Map<String,dynamic> fav) async{
+    try{
+      final d=await WazenApi.instance.logFavoriteMeal(
+        fav['id'].toString(),
+        mealType:(fav['default_meal_type']??'SNACK').toString(),
+      );
+      if(mounted){
+        setState(()=>day=d);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تمت إضافة الوجبة المفضلة ليومك.')));
+      }
+    }catch(e){if(mounted)setState(()=>error=e.toString());}
+  }
+
   @override Widget build(BuildContext context){
     final d=day;
     return Scaffold(
@@ -119,6 +164,10 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
             if(error!=null)Padding(padding:const EdgeInsets.only(bottom:12),child:Text(error!,style:const TextStyle(color:Colors.red))),
             if(d!=null)...[
               _summary(d),
+              if(favorites.isNotEmpty)...[
+                const SizedBox(height:16),
+                _favoritesSection(),
+              ],
               const SizedBox(height:20),
               ...mealOrder.map((meal)=>_section(meal,d.items.where((x)=>x.mealType==meal).toList())),
             ],
@@ -176,9 +225,16 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
             title:Text(x.foodName,style:const TextStyle(fontWeight:FontWeight.w700)),
             subtitle:Text('${x.calories.toStringAsFixed(0)} kcal • ${x.proteinG.toStringAsFixed(1)}g بروتين'),
             trailing:PopupMenuButton<String>(
-              onSelected:(v){if(v=='edit')edit(x);if(v=='delete')remove(x);},
+              onSelected:(v){
+                if(v=='edit')edit(x);
+                if(v=='duplicate')duplicate(x);
+                if(v=='favorite')favorite(x);
+                if(v=='delete')remove(x);
+              },
               itemBuilder:(_)=>const[
                 PopupMenuItem(value:'edit',child:Text('تعديل')),
+                PopupMenuItem(value:'duplicate',child:Text('نسخ الوجبة')),
+                PopupMenuItem(value:'favorite',child:Text('حفظ كمفضلة')),
                 PopupMenuItem(value:'delete',child:Text('حذف')),
               ],
             ),
@@ -187,6 +243,64 @@ class _FoodLogScreenState extends State<FoodLogScreen>{
       ]),
     );
   }
+
+
+  Widget _favoritesSection()=>Container(
+    padding:const EdgeInsets.all(14),
+    decoration:BoxDecoration(
+      color:const Color(0xFFF7F8F5),
+      borderRadius:BorderRadius.circular(18),
+    ),
+    child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      const Row(children:[
+        Icon(Icons.star_rounded,color:WazenTheme.greenDark),
+        SizedBox(width:6),
+        Text('المفضلة',style:TextStyle(fontSize:17,fontWeight:FontWeight.w900)),
+      ]),
+      const SizedBox(height:10),
+      SizedBox(
+        height:84,
+        child:ListView.separated(
+          scrollDirection:Axis.horizontal,
+          itemCount:favorites.length,
+          separatorBuilder:(_,__)=>const SizedBox(width:8),
+          itemBuilder:(_,i){
+            final f=favorites[i];
+            return InkWell(
+              borderRadius:BorderRadius.circular(14),
+              onTap:()=>logFavorite(f),
+              child:Container(
+                width:165,
+                padding:const EdgeInsets.all(12),
+                decoration:BoxDecoration(
+                  color:Colors.white,
+                  borderRadius:BorderRadius.circular(14),
+                  border:Border.all(color:const Color(0xFFE3E7E3)),
+                ),
+                child:Column(
+                  crossAxisAlignment:CrossAxisAlignment.start,
+                  mainAxisAlignment:MainAxisAlignment.center,
+                  children:[
+                    Text(
+                      (f['food_name']??'وجبة').toString(),
+                      maxLines:1,
+                      overflow:TextOverflow.ellipsis,
+                      style:const TextStyle(fontWeight:FontWeight.w800),
+                    ),
+                    const SizedBox(height:5),
+                    Text(
+                      '0 kcal • اضغط للإضافة',
+                      style:const TextStyle(fontSize:11,color:Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ]),
+  );
 
   Widget _metric(String label,double value,String unit)=>Column(children:[
     Text(label,style:const TextStyle(fontSize:12,color:Colors.black54)),
