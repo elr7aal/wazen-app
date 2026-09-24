@@ -15,6 +15,7 @@ TRACKED_FIELDS = (
     'target_protein_g',
     'target_carbs_g',
     'target_fat_g',
+    'target_fiber_g',
     'sodium_max_mg',
 )
 
