@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import Base, engine, get_db, SessionLocal
-from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback, AdminAuditLog
+from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback, AdminAuditLog, FavoriteMeal
 from app.models.schemas import (
     DailyStateRequest, RecommendationRequest, MakeItFitRequest, RebalanceRequest,
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
@@ -41,7 +41,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.1.0')
+app = FastAPI(title='WAZEN API', version='1.2.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +59,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.1.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.2.0'})
 
 
 # -------- Authentication --------
@@ -364,6 +364,138 @@ def delete_food_log(log_id: str, user: User = Depends(get_current_user), db: Ses
     db.delete(row); db.commit()
     return envelope({'deleted': True, 'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump()})
 
+
+
+class FavoriteLogRequest(BaseModel):
+    meal_type: Optional[Literal['BREAKFAST','LUNCH','DINNER','SNACK']] = None
+
+
+def _serialize_favorite(x: FavoriteMeal):
+    return {
+        'id':x.id,
+        'food_id':x.food_id,
+        'food_name':x.food_name,
+        'default_meal_type':x.default_meal_type,
+        'calories':x.calories,
+        'protein_g':x.protein_g,
+        'carbs_g':x.carbs_g,
+        'fat_g':x.fat_g,
+        'sodium_mg':x.sodium_mg,
+        'created_at':x.created_at.isoformat(),
+    }
+
+
+@app.post('/api/v1/food-log/{log_id}/duplicate')
+def duplicate_food_log(
+    log_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    source=db.get(FoodLog,log_id)
+    if not source or source.user_id!=user.id:
+        raise HTTPException(status_code=404,detail='Food log not found')
+    row=FoodLog(
+        user_id=user.id,
+        food_id=source.food_id,
+        food_name=source.food_name,
+        meal_type=source.meal_type,
+        entry_method='DUPLICATED',
+        calories=source.calories,
+        protein_g=source.protein_g,
+        carbs_g=source.carbs_g,
+        fat_g=source.fat_g,
+        sodium_mg=source.sodium_mg,
+    )
+    db.add(row);db.commit();db.refresh(row)
+    return envelope({
+        'item':{
+            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
+            'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
+            'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
+            'logged_at':row.logged_at.isoformat(),
+        },
+        'totals':today_totals(db,user.id),
+        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
+
+
+@app.post('/api/v1/food-log/{log_id}/favorite')
+def favorite_food_log(
+    log_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    source=db.get(FoodLog,log_id)
+    if not source or source.user_id!=user.id:
+        raise HTTPException(status_code=404,detail='Food log not found')
+    existing=db.scalar(select(FavoriteMeal).where(
+        FavoriteMeal.user_id==user.id,
+        FavoriteMeal.food_name==source.food_name,
+        FavoriteMeal.calories==source.calories,
+        FavoriteMeal.protein_g==source.protein_g,
+    ))
+    if existing:
+        return envelope({'favorite':_serialize_favorite(existing),'created':False})
+    fav=FavoriteMeal(
+        user_id=user.id,
+        food_id=source.food_id,
+        food_name=source.food_name,
+        default_meal_type=source.meal_type,
+        calories=source.calories,
+        protein_g=source.protein_g,
+        carbs_g=source.carbs_g,
+        fat_g=source.fat_g,
+        sodium_mg=source.sodium_mg,
+        source_log_id=source.id,
+    )
+    db.add(fav);db.commit();db.refresh(fav)
+    return envelope({'favorite':_serialize_favorite(fav),'created':True})
+
+
+@app.get('/api/v1/food-log/favorites')
+def favorite_meals(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows=db.scalars(select(FavoriteMeal).where(
+        FavoriteMeal.user_id==user.id
+    ).order_by(FavoriteMeal.created_at.desc())).all()
+    return envelope({'items':[_serialize_favorite(x) for x in rows],'count':len(rows)})
+
+
+@app.post('/api/v1/food-log/favorites/{favorite_id}/log')
+def log_favorite_meal(
+    favorite_id: str,
+    req: FavoriteLogRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    fav=db.get(FavoriteMeal,favorite_id)
+    if not fav or fav.user_id!=user.id:
+        raise HTTPException(status_code=404,detail='Favorite meal not found')
+    row=FoodLog(
+        user_id=user.id,
+        food_id=fav.food_id,
+        food_name=fav.food_name,
+        meal_type=req.meal_type or fav.default_meal_type,
+        entry_method='FAVORITE',
+        calories=fav.calories,
+        protein_g=fav.protein_g,
+        carbs_g=fav.carbs_g,
+        fat_g=fav.fat_g,
+        sodium_mg=fav.sodium_mg,
+    )
+    db.add(row);db.commit();db.refresh(row)
+    return envelope({
+        'item':{
+            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
+            'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
+            'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
+            'logged_at':row.logged_at.isoformat(),
+        },
+        'totals':today_totals(db,user.id),
+        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
 
 @app.get('/api/v1/nutrition/today')
 def nutrition_today(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
