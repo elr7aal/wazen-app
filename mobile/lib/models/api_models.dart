@@ -3,6 +3,8 @@ class DailyState {
   final double proteinGapG;
   final double? carbsRemainingG;
   final double? fatRemainingG;
+  final double? fiberRemainingG;
+  final double activityCredit;
   final double? sodiumRemainingMg;
 
   const DailyState({
@@ -10,6 +12,8 @@ class DailyState {
     required this.proteinGapG,
     this.carbsRemainingG,
     this.fatRemainingG,
+    this.fiberRemainingG,
+    this.activityCredit=0,
     this.sodiumRemainingMg,
   });
 
@@ -18,6 +22,8 @@ class DailyState {
         proteinGapG: (json['protein_gap_g'] ?? 0).toDouble(),
         carbsRemainingG: (json['carbs_remaining_g'] as num?)?.toDouble(),
         fatRemainingG: (json['fat_remaining_g'] as num?)?.toDouble(),
+        fiberRemainingG: (json['fiber_remaining_g'] as num?)?.toDouble(),
+        activityCredit: (json['activity_credit'] as num? ?? 0).toDouble(),
         sodiumRemainingMg: (json['sodium_remaining_mg'] as num?)?.toDouble(),
       );
 }
@@ -27,15 +33,17 @@ class NutritionInfo {
   final double? proteinG;
   final double? carbsG;
   final double? fatG;
+  final double? fiberG;
   final double? sodiumMg;
 
-  const NutritionInfo({this.calories, this.proteinG, this.carbsG, this.fatG, this.sodiumMg});
+  const NutritionInfo({this.calories, this.proteinG, this.carbsG, this.fatG, this.fiberG, this.sodiumMg});
 
   factory NutritionInfo.fromJson(Map<String, dynamic> json) => NutritionInfo(
         calories: (json['calories'] as num?)?.toDouble(),
         proteinG: (json['protein_g'] as num?)?.toDouble(),
         carbsG: (json['carbs_g'] as num?)?.toDouble(),
         fatG: (json['fat_g'] as num?)?.toDouble(),
+        fiberG: (json['fiber_g'] as num?)?.toDouble(),
         sodiumMg: (json['sodium_mg'] as num?)?.toDouble(),
       );
 }
@@ -209,13 +217,14 @@ class FoodLogItem {
   final double proteinG;
   final double carbsG;
   final double fatG;
+  final double fiberG;
   final double sodiumMg;
   final DateTime? loggedAt;
 
   const FoodLogItem({
     required this.id, required this.foodName, required this.mealType,
     required this.entryMethod, required this.calories, required this.proteinG,
-    required this.carbsG, required this.fatG, required this.sodiumMg,
+    required this.carbsG, required this.fatG, required this.fiberG, required this.sodiumMg,
     this.foodId, this.loggedAt,
   });
 
@@ -229,6 +238,7 @@ class FoodLogItem {
     proteinG:(json['protein_g'] as num? ?? 0).toDouble(),
     carbsG:(json['carbs_g'] as num? ?? 0).toDouble(),
     fatG:(json['fat_g'] as num? ?? 0).toDouble(),
+    fiberG:(json['fiber_g'] as num? ?? 0).toDouble(),
     sodiumMg:(json['sodium_mg'] as num? ?? 0).toDouble(),
     loggedAt:json['logged_at']==null?null:DateTime.tryParse(json['logged_at'].toString()),
   );
