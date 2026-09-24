@@ -246,3 +246,124 @@ class FoodLogDay {
     dailyState:DailyState.fromJson(Map<String,dynamic>.from(json['daily_state'] as Map)),
   );
 }
+
+
+class WeeklyPlanItem {
+  final String id;
+  final String mealType;
+  final String? foodId;
+  final String foodName;
+  final double calories;
+  final double proteinG;
+  final double? price;
+  final String currency;
+  final String status;
+
+  const WeeklyPlanItem({
+    required this.id,
+    required this.mealType,
+    required this.foodName,
+    required this.calories,
+    required this.proteinG,
+    required this.currency,
+    required this.status,
+    this.foodId,
+    this.price,
+  });
+
+  factory WeeklyPlanItem.fromJson(Map<String,dynamic> json)=>WeeklyPlanItem(
+    id:json['id'] as String,
+    mealType:(json['meal_type']??'SNACK').toString(),
+    foodId:json['food_id'] as String?,
+    foodName:(json['food_name']??'').toString(),
+    calories:(json['calories'] as num? ?? 0).toDouble(),
+    proteinG:(json['protein_g'] as num? ?? 0).toDouble(),
+    price:(json['price'] as num?)?.toDouble(),
+    currency:(json['currency']??'AED').toString(),
+    status:(json['status']??'PLANNED').toString(),
+  );
+}
+
+class WeeklyPlanDay {
+  final DateTime date;
+  final List<WeeklyPlanItem> items;
+  final double totalCalories;
+  final double totalProteinG;
+
+  const WeeklyPlanDay({
+    required this.date,
+    required this.items,
+    required this.totalCalories,
+    required this.totalProteinG,
+  });
+
+  factory WeeklyPlanDay.fromJson(Map<String,dynamic> json)=>WeeklyPlanDay(
+    date:DateTime.parse(json['date'].toString()),
+    items:((json['items'] as List?)??const [])
+      .map((e)=>WeeklyPlanItem.fromJson(Map<String,dynamic>.from(e as Map))).toList(),
+    totalCalories:(json['total_calories'] as num? ?? 0).toDouble(),
+    totalProteinG:(json['total_protein_g'] as num? ?? 0).toDouble(),
+  );
+}
+
+class WeeklyPlan {
+  final DateTime weekStart;
+  final List<WeeklyPlanDay> days;
+  const WeeklyPlan({required this.weekStart,required this.days});
+  factory WeeklyPlan.fromJson(Map<String,dynamic> json)=>WeeklyPlan(
+    weekStart:DateTime.parse(json['week_start'].toString()),
+    days:((json['days'] as List?)??const [])
+      .map((e)=>WeeklyPlanDay.fromJson(Map<String,dynamic>.from(e as Map))).toList(),
+  );
+}
+
+class WeightPoint {
+  final DateTime date;
+  final double weightKg;
+  const WeightPoint({required this.date,required this.weightKg});
+  factory WeightPoint.fromJson(Map<String,dynamic> json)=>WeightPoint(
+    date:DateTime.parse(json['date'].toString()),
+    weightKg:(json['weight_kg'] as num).toDouble(),
+  );
+}
+
+class ProgressSummary {
+  final int rangeDays;
+  final int trackedDays;
+  final int goalDays;
+  final double averageCalories;
+  final double averageProteinG;
+  final double restaurantSpendAed;
+  final double targetCalories;
+  final double targetProteinG;
+  final List<WeightPoint> weightTrend;
+  final List<Map<String,dynamic>> daily;
+
+  const ProgressSummary({
+    required this.rangeDays,
+    required this.trackedDays,
+    required this.goalDays,
+    required this.averageCalories,
+    required this.averageProteinG,
+    required this.restaurantSpendAed,
+    required this.targetCalories,
+    required this.targetProteinG,
+    required this.weightTrend,
+    required this.daily,
+  });
+
+  factory ProgressSummary.fromJson(Map<String,dynamic> json)=>ProgressSummary(
+    rangeDays:(json['range_days'] as num? ?? 7).toInt(),
+    trackedDays:(json['tracked_days'] as num? ?? 0).toInt(),
+    goalDays:(json['goal_days'] as num? ?? 0).toInt(),
+    averageCalories:(json['average_calories'] as num? ?? 0).toDouble(),
+    averageProteinG:(json['average_protein_g'] as num? ?? 0).toDouble(),
+    restaurantSpendAed:(json['restaurant_spend_aed'] as num? ?? 0).toDouble(),
+    targetCalories:(json['target_calories'] as num? ?? 0).toDouble(),
+    targetProteinG:(json['target_protein_g'] as num? ?? 0).toDouble(),
+    weightTrend:((json['weight_trend'] as List?)??const [])
+      .map((e)=>WeightPoint.fromJson(Map<String,dynamic>.from(e as Map))).toList(),
+    daily:((json['daily'] as List?)??const [])
+      .map((e)=>Map<String,dynamic>.from(e as Map)).toList(),
+  );
+}
