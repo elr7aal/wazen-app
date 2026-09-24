@@ -367,4 +367,39 @@ class WazenApi {
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
+
+  Future<List<Map<String,dynamic>>> healthLimits() async {
+    final r=await http.get(Uri.parse('$baseUrl/health-limits'),headers:_headers);
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return ((data['items'] as List?)??const [])
+      .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String,dynamic>> setHealthLimit({
+    required String nutrientCode,
+    required String limitType,
+    required double value,
+    required String unit,
+    required String severity,
+    required String sourceType,
+    String? note,
+    bool active=true,
+  }) async {
+    final r=await http.put(
+      Uri.parse('$baseUrl/health-limits'),
+      headers:_headers,
+      body:jsonEncode({
+        'nutrient_code':nutrientCode,
+        'limit_type':limitType,
+        'value':value,
+        'unit':unit,
+        'severity':severity,
+        'source_type':sourceType,
+        'note':note,
+        'active':active,
+      }),
+    );
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
 }
