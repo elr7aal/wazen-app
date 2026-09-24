@@ -15,6 +15,7 @@ from app.models.schemas import (
     DailyStateRequest, RecommendationRequest, MakeItFitRequest, RebalanceRequest,
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
     UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
+    RefreshTokenRequest, LogoutRequest, ForgotPasswordRequest, ResetPasswordRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -29,13 +30,14 @@ from app.services.onboarding import calculate_targets
 from app.services.profile_insights import profile_insights
 from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods
 from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
+from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='0.6.0')
+app = FastAPI(title='WAZEN API', version='0.7.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,7 +55,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.6.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.7.0'})
 
 
 # -------- Authentication --------
@@ -68,7 +70,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(u); db.flush()
     p = UserProfile(user_id=u.id)
     db.add(p); db.commit(); db.refresh(u)
-    return envelope({'user_id': u.id, 'access_token': create_access_token(u.id), 'token_type': 'bearer'})
+    session = issue_session(db, u.id)
+    return envelope({'user_id': u.id, **session})
 
 
 @app.post('/api/v1/auth/login')
@@ -76,7 +79,54 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     u = db.scalar(select(User).where(User.email == req.email.strip().lower()))
     if not u or not verify_password(req.password, u.password_hash):
         raise HTTPException(status_code=401, detail='Invalid credentials')
-    return envelope({'user_id': u.id, 'access_token': create_access_token(u.id), 'token_type': 'bearer'})
+    return envelope({'user_id': u.id, **issue_session(db, u.id)})
+
+
+@app.post('/api/v1/auth/refresh')
+def refresh_auth(req: RefreshTokenRequest, db: Session = Depends(get_db)):
+    try:
+        return envelope(rotate_session(db, req.refresh_token))
+    except ValueError:
+        raise HTTPException(status_code=401, detail='Invalid or expired refresh token')
+
+
+@app.post('/api/v1/auth/logout')
+def logout_auth(
+    req: LogoutRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if req.all_sessions:
+        revoked = revoke_all_sessions(db, user.id)
+    else:
+        revoked = 1 if revoke_session(db, req.refresh_token, user.id) else 0
+    return envelope({'logged_out': True, 'revoked_sessions': revoked})
+
+
+@app.post('/api/v1/auth/forgot-password')
+def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    email = req.email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email))
+    raw = create_password_reset(db, user)
+    debug = os.getenv('WAZEN_PASSWORD_RESET_DEBUG', '').lower() in {'1','true','yes'}
+    delivery = os.getenv('WAZEN_PASSWORD_RESET_DELIVERY', 'NOT_CONFIGURED').upper()
+    data = {
+        'accepted': True,
+        'delivery': delivery if user else 'GENERIC',
+        'message': 'If the account exists, password reset instructions will be sent when a delivery provider is configured.',
+    }
+    if debug and raw:
+        data['debug_reset_token'] = raw
+    return envelope(data)
+
+
+@app.post('/api/v1/auth/reset-password')
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        consume_password_reset(db, req.token, req.new_password)
+    except ValueError:
+        raise HTTPException(status_code=400, detail='Invalid or expired reset token')
+    return envelope({'reset': True})
 
 
 # -------- User/Profile --------
