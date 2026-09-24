@@ -6,6 +6,7 @@ import 'home_screen.dart';
 import 'food_log_screen.dart';
 import 'craving_screen.dart';
 import 'auth_screen.dart';
+import 'plan_screen.dart';
 
 class ProfileScreen extends StatefulWidget{
   const ProfileScreen({super.key});
@@ -113,16 +114,18 @@ class _ProfileScreenState extends State<ProfileScreen>{
       actions:[IconButton(onPressed:load,icon:const Icon(Icons.refresh_rounded))]
     ),
     bottomNavigationBar:NavigationBar(
-      selectedIndex:3,
+      selectedIndex:4,
       onDestinationSelected:(i){
         if(i==0)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const HomeScreen()));
         if(i==1)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const FoodLogScreen()));
         if(i==2)Navigator.push(context,MaterialPageRoute(builder:(_)=>const CravingScreen()));
+        if(i==3)Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const PlanScreen()));
       },
       destinations:const[
         NavigationDestination(icon:Icon(Icons.home_outlined),label:'الرئيسية'),
         NavigationDestination(icon:Icon(Icons.today_outlined),label:'يومي'),
         NavigationDestination(icon:Icon(Icons.restaurant_menu_outlined),label:'اكتشف'),
+        NavigationDestination(icon:Icon(Icons.calendar_month_outlined),label:'خطتي'),
         NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'حسابي'),
       ],
     ),
