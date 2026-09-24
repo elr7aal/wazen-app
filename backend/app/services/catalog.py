@@ -9,6 +9,43 @@ DATA_DIR = Path(__file__).resolve().parents[1] / 'data'
 SEED_FILE = DATA_DIR / 'catalog_seed_v5.json'
 
 
+SEARCH_SYNONYMS = {
+    'برغر': ['burger','burgers','برجر'],
+    'برجر': ['burger','burgers','برغر'],
+    'burger': ['burger','burgers','برغر','برجر'],
+    'دجاج': ['chicken','chickenburger','mcchicken','zinger','twister','tenders','nuggets'],
+    'chicken': ['chicken','دجاج'],
+    'زنجر': ['zinger','زنجر'],
+    'zinger': ['zinger','زنجر'],
+    'بطاطس': ['fries','chips','بطاطا','بطاطس'],
+    'بطاطا': ['fries','chips','بطاطس','بطاطا'],
+    'fries': ['fries','بطاطس','بطاطا'],
+    'سمك': ['fish','tuna','سلمون'],
+    'fish': ['fish','سمك'],
+    'تونة': ['tuna','تونه'],
+    'tuna': ['tuna','تونة','تونه'],
+    'سلطة': ['salad','سلطه'],
+    'salad': ['salad','سلطة','سلطه'],
+    'رز': ['rice','أرز','ارز'],
+    'أرز': ['rice','رز','ارز'],
+    'rice': ['rice','رز','أرز','ارز'],
+    'حلا': ['dessert','sweet','حلويات'],
+    'حلويات': ['dessert','sweet','حلا'],
+    'dessert': ['dessert','sweet','حلا','حلويات'],
+}
+
+def _search_terms(q: str) -> list[str]:
+    raw=' '.join((q or '').strip().lower().split())
+    if not raw:
+        return []
+    terms={raw}
+    for token in raw.split():
+        terms.add(token)
+        terms.update(SEARCH_SYNONYMS.get(token,[]))
+    return sorted({x for x in terms if x}, key=len, reverse=True)
+
+
+
 def _f(v):
     if v in (None, ''):
         return None
@@ -121,24 +158,57 @@ def import_seed(db: Session) -> dict:
     return {'seeded': True, 'foods': created_foods, 'modifiers': created_modifiers}
 
 
-def query_foods(db: Session, vendor=None, category=None, q=None, max_calories=None, min_protein_g=None, limit=50):
+def query_foods(
+    db: Session,
+    vendor=None,
+    brand=None,
+    category=None,
+    food_type=None,
+    q=None,
+    max_calories=None,
+    min_protein_g=None,
+    max_sodium_mg=None,
+    min_fiber_g=None,
+    max_price=None,
+    limit=50,
+):
     stmt = select(FoodItem).options(
         selectinload(FoodItem.nutrition), selectinload(FoodItem.allergens), selectinload(FoodItem.sources)
     ).where(FoodItem.status == 'ACTIVE')
     if vendor:
         stmt = stmt.where(FoodItem.vendor_name.ilike(vendor))
+    if brand:
+        stmt = stmt.where(FoodItem.brand_name.ilike(brand))
     if category:
         stmt = stmt.where(FoodItem.category == category.upper())
+    if food_type:
+        stmt = stmt.where(FoodItem.food_type == food_type.upper())
+    if max_price is not None:
+        stmt = stmt.where(FoodItem.price.is_not(None), FoodItem.price <= max_price)
     if q:
-        like=f'%{q.strip()}%'
-        stmt = stmt.where(or_(FoodItem.name_en.ilike(like), FoodItem.name_ar.ilike(like), FoodItem.brand_name.ilike(like), FoodItem.vendor_name.ilike(like)))
-    if max_calories is not None or min_protein_g is not None:
+        clauses=[]
+        for term in _search_terms(q):
+            like=f'%{term}%'
+            clauses.extend([
+                FoodItem.name_en.ilike(like),
+                FoodItem.name_ar.ilike(like),
+                FoodItem.brand_name.ilike(like),
+                FoodItem.vendor_name.ilike(like),
+                FoodItem.category.ilike(like),
+            ])
+        if clauses:
+            stmt = stmt.where(or_(*clauses))
+    if any(x is not None for x in [max_calories,min_protein_g,max_sodium_mg,min_fiber_g]):
         stmt = stmt.join(FoodNutrition, FoodNutrition.food_id == FoodItem.id)
         if max_calories is not None:
-            stmt = stmt.where(FoodNutrition.calories <= max_calories)
+            stmt = stmt.where(FoodNutrition.calories.is_not(None),FoodNutrition.calories <= max_calories)
         if min_protein_g is not None:
-            stmt = stmt.where(FoodNutrition.protein_g >= min_protein_g)
-    return list(db.scalars(stmt.limit(min(limit,100))).all())
+            stmt = stmt.where(FoodNutrition.protein_g.is_not(None),FoodNutrition.protein_g >= min_protein_g)
+        if max_sodium_mg is not None:
+            stmt = stmt.where(FoodNutrition.sodium_mg.is_not(None),FoodNutrition.sodium_mg <= max_sodium_mg)
+        if min_fiber_g is not None:
+            stmt = stmt.where(FoodNutrition.fiber_g.is_not(None),FoodNutrition.fiber_g >= min_fiber_g)
+    return list(db.scalars(stmt.limit(min(max(1,limit),100))).unique().all())
 
 
 def serialize_food(item: FoodItem):
