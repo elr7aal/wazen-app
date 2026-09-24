@@ -73,23 +73,27 @@ def evaluate_food_health_limits(food, limits):
         return hard_reasons,warnings
 
     for limit in limits:
-        attr=NUTRIENT_ATTRS.get(limit.nutrient_code)
+        code_value = limit.get('nutrient_code') if isinstance(limit,dict) else limit.nutrient_code
+        limit_type = limit.get('limit_type') if isinstance(limit,dict) else limit.limit_type
+        threshold = limit.get('value') if isinstance(limit,dict) else limit.value
+        severity = limit.get('severity') if isinstance(limit,dict) else limit.severity
+        attr=NUTRIENT_ATTRS.get(code_value)
         if not attr:
             continue
         value=getattr(nutrition,attr,None)
         if value is None:
-            code=f'MISSING_{limit.nutrient_code}'
-            if limit.severity=='HARD':
+            code=f'MISSING_{code_value}'
+            if severity=='HARD':
                 hard_reasons.append(code)
             else:
                 warnings.append(code)
             continue
 
-        violates=(limit.limit_type=='MAX' and value>limit.value) or (limit.limit_type=='MIN' and value<limit.value)
+        violates=(limit_type=='MAX' and value>threshold) or (limit_type=='MIN' and value<threshold)
         if not violates:
             continue
-        code=f'{limit.nutrient_code}_{limit.limit_type}_LIMIT'
-        if limit.severity=='HARD':
+        code=f'{code_value}_{limit_type}_LIMIT'
+        if severity=='HARD':
             hard_reasons.append(code)
         else:
             warnings.append(code)
