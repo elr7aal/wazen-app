@@ -37,6 +37,9 @@ class RecommendationRequest(BaseModel):
     preferred_terms: List[str] = []
     disliked_terms: List[str] = []
     behavior_scores: Dict[str, float] = {}
+    preference_levels: Dict[str, str] = {}
+    never_show_terms: List[str] = []
+    never_show_food_ids: List[str] = []
 
 
 class ModificationContext(BaseModel):
@@ -205,3 +208,9 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=20)
     new_password: str = Field(min_length=8)
+
+
+class PreferenceSettingRequest(BaseModel):
+    target_type: Literal['TERM','FOOD']
+    target_value: str = Field(min_length=1, max_length=120)
+    level: Literal['LOVE','LIKE','NEUTRAL','DISLIKE','NEVER_SHOW']
