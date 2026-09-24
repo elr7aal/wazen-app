@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.db_models import User, UserProfile, FoodLog, RecommendationFeedback
 from app.models.schemas import DailyStateRequest, RecommendationRequest
 from app.services.recommendation import recommend_now
+from app.services.preferences import preference_context
 
 
 def ensure_profile(db: Session, user: User) -> UserProfile:
@@ -58,11 +59,15 @@ def behavior_scores(db: Session, user_id: str) -> dict[str,float]:
 
 def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_calories=None, budget_max=None, allow_modifications=True):
     p = ensure_profile(db, user)
+    pref_ctx=preference_context(db,user.id)
     req = RecommendationRequest(
         daily_state=build_daily_request(db, user), vendor=vendor, category=category,
         max_calories=max_calories, budget_max=budget_max or p.daily_budget,
         severe_allergens=p.severe_allergens(), allow_modifications=allow_modifications,
-        preferred_terms=p.food_preferences(), disliked_terms=p.disliked_foods(), behavior_scores=behavior_scores(db,user.id)
+        preferred_terms=p.food_preferences(), disliked_terms=p.disliked_foods(), behavior_scores=behavior_scores(db,user.id),
+        preference_levels=pref_ctx['preference_levels'],
+        never_show_terms=pref_ctx['never_show_terms'],
+        never_show_food_ids=pref_ctx['never_show_food_ids'],
     )
     return recommend_now(db, req)
 
