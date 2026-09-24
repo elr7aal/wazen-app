@@ -13,6 +13,8 @@ class DailyStateRequest(BaseModel):
     consumed_carbs_g: Optional[float] = Field(default=None, ge=0)
     target_fat_g: Optional[float] = Field(default=None, ge=0)
     consumed_fat_g: Optional[float] = Field(default=None, ge=0)
+    target_fiber_g: Optional[float] = Field(default=None, ge=0)
+    consumed_fiber_g: Optional[float] = Field(default=None, ge=0)
     sodium_max_mg: Optional[float] = Field(default=None, ge=0)
     consumed_sodium_mg: Optional[float] = Field(default=None, ge=0)
 
@@ -22,6 +24,8 @@ class DailyState(BaseModel):
     protein_gap_g: float
     carbs_remaining_g: Optional[float] = None
     fat_remaining_g: Optional[float] = None
+    fiber_remaining_g: Optional[float] = None
+    activity_credit: float = 0
     sodium_remaining_mg: Optional[float] = None
 
 
@@ -94,6 +98,7 @@ class ProfileUpdateRequest(BaseModel):
     target_protein_g: Optional[float] = Field(default=None, ge=0)
     target_carbs_g: Optional[float] = Field(default=None, ge=0)
     target_fat_g: Optional[float] = Field(default=None, ge=0)
+    target_fiber_g: Optional[float] = Field(default=None, ge=0)
     sodium_max_mg: Optional[float] = Field(default=None, ge=0)
     severe_allergens: Optional[List[str]] = None
     food_preferences: Optional[List[str]] = None
@@ -109,6 +114,7 @@ class FoodLogCreateRequest(BaseModel):
     protein_g: float = Field(default=0, ge=0)
     carbs_g: float = Field(default=0, ge=0)
     fat_g: float = Field(default=0, ge=0)
+    fiber_g: float = Field(default=0, ge=0)
     sodium_mg: float = Field(default=0, ge=0)
 
 
@@ -154,6 +160,7 @@ class FoodLogUpdateRequest(BaseModel):
     protein_g: Optional[float] = Field(default=None, ge=0)
     carbs_g: Optional[float] = Field(default=None, ge=0)
     fat_g: Optional[float] = Field(default=None, ge=0)
+    fiber_g: Optional[float] = Field(default=None, ge=0)
     sodium_mg: Optional[float] = Field(default=None, ge=0)
 
 
@@ -227,3 +234,9 @@ class HealthLimitRequest(BaseModel):
     source_type: Literal['USER','CLINICIAN'] = 'USER'
     note: Optional[str] = Field(default=None, max_length=500)
     active: bool = True
+
+
+class ActivityLogCreateRequest(BaseModel):
+    calories_credit: float = Field(gt=0, le=5000)
+    source: Literal['MANUAL','WATCH','PHONE','WORKOUT'] = 'MANUAL'
+    note: Optional[str] = Field(default=None, max_length=255)
