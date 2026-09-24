@@ -71,12 +71,12 @@ def behavior_scores(db: Session, user_id: str) -> dict[str,float]:
         scores[f.food_id]=scores.get(f.food_id,0.0)+weights.get(f.action,0.0)
     return scores
 
-def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_calories=None, budget_max=None, allow_modifications=True):
+def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_calories=None, min_protein_g=None, budget_max=None, allow_modifications=True):
     p = ensure_profile(db, user)
     pref_ctx=preference_context(db,user.id)
     req = RecommendationRequest(
         daily_state=build_daily_request(db, user), vendor=vendor, category=category,
-        max_calories=max_calories, budget_max=budget_max or p.daily_budget,
+        max_calories=max_calories, min_protein_g=min_protein_g, budget_max=budget_max or p.daily_budget,
         severe_allergens=p.severe_allergens(), allow_modifications=allow_modifications,
         preferred_terms=p.food_preferences(), disliked_terms=p.disliked_foods(), behavior_scores=behavior_scores(db,user.id),
         preference_levels=pref_ctx['preference_levels'],
