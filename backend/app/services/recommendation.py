@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.schemas import RecommendationRequest
 from app.services.catalog import query_foods
 from app.services.daily_state import calculate_daily_state
+from app.services.health_limits import evaluate_food_health_limits
 
 
 def _norm(v: str | None) -> str | None:
@@ -84,12 +85,16 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
             excluded.append({'food_id':item.id,'reason':'USER_NEVER_SHOW'}); continue
         if item.availability_status in {'UNAVAILABLE','OUT_OF_STOCK'}:
             excluded.append({'food_id':item.id,'reason':'UNAVAILABLE'}); continue
+        hard_health,health_warnings=evaluate_food_health_limits(item,req.health_limits)
+        if hard_health:
+            excluded.append({'food_id':item.id,'reason':'HEALTH_LIMIT','details':hard_health}); continue
 
         protein=n.protein_g or 0.0; sodium=n.sodium_mg or 0.0
         calorie_fit=_calorie_fit(n.calories,daily.remaining_calories)
         protein_fit=_protein_fit(protein,daily.protein_gap_g)
         nutrition_score=calorie_fit*.6+protein_fit*.4
-        health_score=100.0; warnings=[]
+        health_score=100.0; warnings=list(health_warnings)
+        if health_warnings: health_score=min(health_score,75.0)
         if warning_allergens.intersection(severe): warnings.append('ALLERGEN_CROSS_CONTACT_WARNING')
         if daily.sodium_remaining_mg is not None and n.sodium_mg is not None and sodium>daily.sodium_remaining_mg:
             health_score=70.0; warnings.append('HIGH_SODIUM_FOR_REMAINING_DAY')
