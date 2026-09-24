@@ -13,6 +13,10 @@ def calculate_daily_state(req: DailyStateRequest) -> DailyState:
     if req.target_fat_g is not None and req.consumed_fat_g is not None:
         fat_remaining = max(0.0, req.target_fat_g - req.consumed_fat_g)
 
+    fiber_remaining = None
+    if req.target_fiber_g is not None and req.consumed_fiber_g is not None:
+        fiber_remaining = max(0.0, req.target_fiber_g - req.consumed_fiber_g)
+
     sodium_remaining = None
     if req.sodium_max_mg is not None and req.consumed_sodium_mg is not None:
         sodium_remaining = max(0.0, req.sodium_max_mg - req.consumed_sodium_mg)
@@ -22,5 +26,7 @@ def calculate_daily_state(req: DailyStateRequest) -> DailyState:
         protein_gap_g=round(protein_gap, 1),
         carbs_remaining_g=None if carbs_remaining is None else round(carbs_remaining, 1),
         fat_remaining_g=None if fat_remaining is None else round(fat_remaining, 1),
+        fiber_remaining_g=None if fiber_remaining is None else round(fiber_remaining, 1),
+        activity_credit=round(req.activity_credit, 1),
         sodium_remaining_mg=None if sodium_remaining is None else round(sodium_remaining, 1),
     )
