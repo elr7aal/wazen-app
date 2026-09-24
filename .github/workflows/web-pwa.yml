@@ -1,15 +1,20 @@
-name: Build WAZEN Web
+name: Validate WAZEN Flutter
 
 on:
   push:
     branches: [main]
     paths:
       - 'mobile/**'
+      - '!mobile/web-dist/**'
       - '.github/workflows/web-pwa.yml'
   workflow_dispatch:
 
+concurrency:
+  group: wazen-flutter-validation
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -29,19 +34,12 @@ jobs:
         working-directory: mobile
         run: flutter pub get
 
-      - name: Build web
+      - name: Run Flutter tests
+        working-directory: mobile
+        run: flutter test
+
+      - name: Validate web build
         working-directory: mobile
         run: >
           flutter build web --release
           --dart-define=API_BASE_URL=https://wazen-api-production-ee44.up.railway.app/api/v1
-
-      - name: Save built web app in repository
-        run: |
-          rm -rf mobile/web-dist
-          mkdir -p mobile/web-dist
-          cp -a mobile/build/web/. mobile/web-dist/
-          git config user.name "WAZEN Web Builder"
-          git config user.email "actions@github.com"
-          git add -f mobile/web-dist
-          git commit -m "chore: publish WAZEN web build [skip ci]" || exit 0
-          git push
