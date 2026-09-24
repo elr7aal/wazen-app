@@ -290,3 +290,14 @@ class ActivityLog(Base):
     source: Mapped[str] = mapped_column(String(32), default='MANUAL')
     note: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logged_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class RecommendationExclusionLog(Base):
+    __tablename__ = 'recommendation_exclusion_logs'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    food_id: Mapped[str] = mapped_column(String(64), index=True)
+    reason: Mapped[str] = mapped_column(String(60), index=True)
+    details_json: Mapped[str] = mapped_column(Text, default='[]')
+    context_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
