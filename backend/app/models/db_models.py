@@ -234,3 +234,14 @@ class GoalHistory(Base):
     reason: Mapped[str] = mapped_column(String(40), default='PROFILE_UPDATE', index=True)
     snapshot_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class UserPreferenceSetting(Base):
+    __tablename__ = 'user_preference_settings'
+    __table_args__ = (UniqueConstraint('user_id', 'target_type', 'target_value', name='uq_user_preference_target'),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    target_type: Mapped[str] = mapped_column(String(20), index=True)
+    target_value: Mapped[str] = mapped_column(String(120), index=True)
+    level: Mapped[str] = mapped_column(String(20), default='NEUTRAL', index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
