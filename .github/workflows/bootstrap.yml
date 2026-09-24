@@ -23,10 +23,9 @@ jobs:
           mkdir -p /tmp/wazen-unpack
           unzip -q WAZEN_Starter_Repo_v15.zip -d /tmp/wazen-unpack
           test -d /tmp/wazen-unpack/wazen_starter
-          cp -a /tmp/wazen-unpack/wazen_starter/. .
+          rsync -a --exclude='.github/workflows/' /tmp/wazen-unpack/wazen_starter/ ./
           rm -f WAZEN_Starter_Repo_v15.zip
           rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap.yml
 
       - name: Commit unpacked WAZEN v15
         run: |
