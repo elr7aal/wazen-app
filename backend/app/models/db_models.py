@@ -160,3 +160,23 @@ class RecommendationFeedback(Base):
     food_id: Mapped[str] = mapped_column(String(64), index=True)
     action: Mapped[str] = mapped_column(String(24), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class FoodReview(Base):
+    __tablename__ = 'food_reviews'
+    food_id: Mapped[str] = mapped_column(ForeignKey('food_items.id', ondelete='CASCADE'), primary_key=True)
+    review_status: Mapped[str] = mapped_column(String(24), default='PENDING', index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AdminAuditLog(Base):
+    __tablename__ = 'admin_audit_logs'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    action: Mapped[str] = mapped_column(String(50), index=True)
+    entity_type: Mapped[str] = mapped_column(String(40), index=True)
+    entity_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    actor: Mapped[str] = mapped_column(String(120), default='admin')
+    details_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
