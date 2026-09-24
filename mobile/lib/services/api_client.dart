@@ -333,4 +333,13 @@ class WazenApi {
     _unwrap(r);
   }
 
+
+  Future<List<Map<String,dynamic>>> goalHistory({int limit=20}) async {
+    final uri=Uri.parse('$baseUrl/profile/history').replace(queryParameters:{'limit':'$limit'});
+    final r=await http.get(uri,headers:_headers);
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return ((data['items'] as List?)??const [])
+      .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+
 }
