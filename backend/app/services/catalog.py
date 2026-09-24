@@ -89,6 +89,7 @@ def import_seed(db: Session) -> dict:
             carbs_g=_f(row.get('carbs_g')), fat_g=_f(row.get('fat_g')), fiber_g=_f(row.get('fiber_g')),
             sugar_g=_f(row.get('sugar_g')), sodium_mg=_f(row.get('sodium_mg')),
         ))
+        # Grocery allergens are conservatively derived only from explicit notes in this alpha seed.
         notes=(row.get('notes') or '').lower()
         note_map={'milk':'MILK','egg':'EGG','fish':'FISH','peanut':'PEANUT','gluten':'GLUTEN','soy':'SOY','sesame':'SESAME'}
         for key, code in note_map.items():

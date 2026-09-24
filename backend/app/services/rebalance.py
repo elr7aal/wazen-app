@@ -19,8 +19,10 @@ def rebalance_day(req: RebalanceRequest):
     )
     state = calculate_daily_state(updated)
     raw_balance = d.target_calories - (d.consumed_calories + req.added_calories) + d.activity_credit
+
     if raw_balance < 0:
         message = f"Your choice is about {abs(raw_balance):.0f} kcal above the current plan. Wazen can keep the choice and make later suggestions lighter."
     else:
         message = f"Meal recorded. About {raw_balance:.0f} kcal remain in the current plan."
+
     return {"updated_state": state.model_dump(), "message": message, "user_choice_preserved": True}

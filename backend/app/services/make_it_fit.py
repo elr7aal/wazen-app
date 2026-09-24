@@ -22,6 +22,17 @@ def make_it_fit(db: Session, req: MakeItFitRequest):
     base={'calories':n.calories or 0,'protein_g':n.protein_g or 0,'carbs_g':n.carbs_g or 0,'fat_g':n.fat_g or 0,'sodium_mg':n.sodium_mg or 0}
     modified=dict(base)
     for m in selected:
-        modified['calories']=max(0,modified['calories']+(m.calorie_delta or 0)); modified['protein_g']=max(0,modified['protein_g']+(m.protein_delta_g or 0)); modified['carbs_g']=max(0,modified['carbs_g']+(m.carbs_delta_g or 0)); modified['fat_g']=max(0,modified['fat_g']+(m.fat_delta_g or 0)); modified['sodium_mg']=max(0,modified['sodium_mg']+(m.sodium_delta_mg or 0))
+        modified['calories']=max(0,modified['calories']+(m.calorie_delta or 0))
+        modified['protein_g']=max(0,modified['protein_g']+(m.protein_delta_g or 0))
+        modified['carbs_g']=max(0,modified['carbs_g']+(m.carbs_delta_g or 0))
+        modified['fat_g']=max(0,modified['fat_g']+(m.fat_delta_g or 0))
+        modified['sodium_mg']=max(0,modified['sodium_mg']+(m.sodium_delta_mg or 0))
     daily=calculate_daily_state(req.daily_state)
-    return {'food_id':item.id,'name':item.name_en or item.name_ar,'base_nutrition':{k:round(v,1) for k,v in base.items()},'modified_nutrition':{k:round(v,1) for k,v in modified.items()},'calories_saved':round(base['calories']-modified['calories'],1),'fits_remaining_calories':modified['calories']<=daily.remaining_calories,'remaining_calories_before_meal':daily.remaining_calories,'applied_modifications':[{'id':m.id,'name':m.name_en,'confidence':m.confidence_level} for m in selected],'note':'Only verified component changes explicitly included in the request are applied. Wazen does not assume hidden sides or sauces.'}
+    return {
+        'food_id':item.id,'name':item.name_en or item.name_ar,
+        'base_nutrition':{k:round(v,1) for k,v in base.items()},'modified_nutrition':{k:round(v,1) for k,v in modified.items()},
+        'calories_saved':round(base['calories']-modified['calories'],1),'fits_remaining_calories':modified['calories']<=daily.remaining_calories,
+        'remaining_calories_before_meal':daily.remaining_calories,
+        'applied_modifications':[{'id':m.id,'name':m.name_en,'confidence':m.confidence_level} for m in selected],
+        'note':'Only verified component changes explicitly included in the request are applied. Wazen does not assume hidden sides or sauces.'
+    }

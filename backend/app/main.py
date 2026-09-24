@@ -1,6 +1,5 @@
-import os
 import re
-from datetime import datetime, timezone
+import os
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,220 +8,612 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import Base, engine, get_db, SessionLocal
-from app.models.db_models import User, UserProfile, FoodLog, FoodItem, RecommendationFeedback
+from app.models.db_models import User, UserProfile, FoodLog, FoodItem, FoodModifier, RecommendationFeedback
 from app.models.schemas import (
+    DailyStateRequest, RecommendationRequest, MakeItFitRequest, RebalanceRequest,
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
-    FoodLogUpdateRequest, OnboardingCompleteRequest, PlanRecalculateRequest,
-    UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest,
-    RecommendationFeedbackRequest, TextFoodParseRequest
+    UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
-from app.services.catalog import ensure_catalog_seeded, query_foods, serialize_food
-from app.services.persistence import ensure_profile, build_daily_request, today_totals, recommend_for_user, log_catalog_food
 from app.services.daily_state import calculate_daily_state
+from app.services.recommendation import recommend_now
+from app.services.make_it_fit import make_it_fit
+from app.services.rebalance import rebalance_day
+from app.services.persistence import ensure_profile, build_daily_request, today_totals, recommend_for_user, log_catalog_food, log_nutrition_snapshot
+from app.services.catalog import ensure_catalog_seeded, query_foods, serialize_food
+from app.services.vision import analyze_food_image
 from app.services.onboarding import calculate_targets
 from app.services.profile_insights import profile_insights
 
 Base.metadata.create_all(bind=engine)
-with SessionLocal() as _db:
-    ensure_catalog_seeded(_db)
 
-app = FastAPI(title="WAZEN API", version="0.5.0-alpha")
+with SessionLocal() as _seed_db:
+    ensure_catalog_seeded(_seed_db)
+
+app = FastAPI(title='WAZEN API', version='0.4.0')
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[x.strip() for x in os.getenv("WAZEN_CORS_ORIGINS","*").split(",") if x.strip()],
+    allow_origins=[x.strip() for x in os.getenv('WAZEN_CORS_ORIGINS', '*').split(',') if x.strip()],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
-def envelope(data=None,error=None,meta=None):
-    return {"success":error is None,"data":data,"error":error,"meta":meta or {}}
 
-@app.get("/api/v1/health")
+
+def envelope(data=None, error=None, meta=None):
+    return {'success': error is None, 'data': data, 'error': error, 'meta': meta or {}}
+
+
+@app.get('/api/v1/health')
 def health():
-    return envelope({"status":"ok","service":"wazen-api","version":"0.5.0-alpha"})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.4.0'})
 
-@app.post("/api/v1/auth/register")
-def register(req:RegisterRequest,db:Session=Depends(get_db)):
-    email=req.email.strip().lower()
-    if "@" not in email: raise HTTPException(status_code=422,detail="Valid email required")
-    if db.scalar(select(User).where(User.email==email)): raise HTTPException(status_code=409,detail="Email already registered")
-    u=User(email=email,password_hash=hash_password(req.password),first_name=req.first_name,language=req.language)
-    db.add(u); db.flush(); db.add(UserProfile(user_id=u.id)); db.commit(); db.refresh(u)
-    return envelope({"user_id":u.id,"access_token":create_access_token(u.id),"token_type":"bearer"})
 
-@app.post("/api/v1/auth/login")
-def login(req:LoginRequest,db:Session=Depends(get_db)):
-    u=db.scalar(select(User).where(User.email==req.email.strip().lower()))
-    if not u or not verify_password(req.password,u.password_hash):
-        raise HTTPException(status_code=401,detail="Invalid credentials")
-    return envelope({"user_id":u.id,"access_token":create_access_token(u.id),"token_type":"bearer"})
+# -------- Authentication --------
+@app.post('/api/v1/auth/register')
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    email = req.email.strip().lower()
+    if '@' not in email:
+        raise HTTPException(status_code=422, detail='Valid email required')
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(status_code=409, detail='Email already registered')
+    u = User(email=email, password_hash=hash_password(req.password), first_name=req.first_name, language=req.language)
+    db.add(u); db.flush()
+    p = UserProfile(user_id=u.id)
+    db.add(p); db.commit(); db.refresh(u)
+    return envelope({'user_id': u.id, 'access_token': create_access_token(u.id), 'token_type': 'bearer'})
 
-def profile_payload(user,p):
-    return {
-        "id":user.id,"email":user.email,"first_name":user.first_name,"language":user.language,
-        "profile":{
-            "height_cm":p.height_cm,"weight_kg":p.weight_kg,"target_weight_kg":p.target_weight_kg,
-            "activity_level":p.activity_level,"goal_type":p.goal_type,"daily_budget":p.daily_budget,
-            "target_calories":p.target_calories,"target_protein_g":p.target_protein_g,
-            "target_carbs_g":p.target_carbs_g,"target_fat_g":p.target_fat_g,"sodium_max_mg":p.sodium_max_mg,
-            "severe_allergens":p.severe_allergens(),"date_of_birth":p.date_of_birth.isoformat() if p.date_of_birth else None,
-            "gender":p.gender,"food_preferences":p.food_preferences(),"disliked_foods":p.disliked_foods(),
-            "onboarding_complete":p.onboarding_complete
+
+@app.post('/api/v1/auth/login')
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    u = db.scalar(select(User).where(User.email == req.email.strip().lower()))
+    if not u or not verify_password(req.password, u.password_hash):
+        raise HTTPException(status_code=401, detail='Invalid credentials')
+    return envelope({'user_id': u.id, 'access_token': create_access_token(u.id), 'token_type': 'bearer'})
+
+
+# -------- User/Profile --------
+@app.get('/api/v1/users/me')
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    p = ensure_profile(db, user)
+    return envelope({
+        'id': user.id, 'email': user.email, 'first_name': user.first_name, 'language': user.language,
+        'profile': {
+            'height_cm': p.height_cm, 'weight_kg': p.weight_kg, 'target_weight_kg': p.target_weight_kg,
+            'activity_level': p.activity_level, 'goal_type': p.goal_type, 'daily_budget': p.daily_budget,
+            'target_calories': p.target_calories, 'target_protein_g': p.target_protein_g,
+            'target_carbs_g': p.target_carbs_g, 'target_fat_g': p.target_fat_g,
+            'sodium_max_mg': p.sodium_max_mg, 'severe_allergens': p.severe_allergens(),
+            'date_of_birth': p.date_of_birth.isoformat() if p.date_of_birth else None,
+            'gender': p.gender, 'food_preferences': p.food_preferences(),
+            'disliked_foods': p.disliked_foods(), 'onboarding_complete': p.onboarding_complete,
         }
-    }
+    })
 
-@app.get("/api/v1/users/me")
-def me(user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    return envelope(profile_payload(user,ensure_profile(db,user)))
 
-@app.patch("/api/v1/users/me")
-def update_me(req:ProfileUpdateRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    p=ensure_profile(db,user); data=req.model_dump(exclude_unset=True)
-    if "first_name" in data: user.first_name=data.pop("first_name")
-    if "severe_allergens" in data: p.severe_allergens_csv="|".join(sorted({x.upper() for x in data.pop("severe_allergens")}))
-    if "food_preferences" in data: p.food_preferences_csv="|".join(sorted({x.strip() for x in data.pop("food_preferences") if x.strip()}))
-    if "disliked_foods" in data: p.disliked_foods_csv="|".join(sorted({x.strip() for x in data.pop("disliked_foods") if x.strip()}))
-    for k,v in data.items(): setattr(p,k,v)
-    db.commit(); return envelope(profile_payload(user,p))
+@app.patch('/api/v1/users/me')
+def update_me(req: ProfileUpdateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    p = ensure_profile(db, user)
+    data = req.model_dump(exclude_unset=True)
+    if 'first_name' in data:
+        user.first_name = data.pop('first_name')
+    if 'severe_allergens' in data:
+        p.severe_allergens_csv = '|'.join(sorted({x.upper() for x in data.pop('severe_allergens')}))
+    if 'food_preferences' in data:
+        p.food_preferences_csv = '|'.join(sorted({x.strip() for x in data.pop('food_preferences') if x.strip()}))
+    if 'disliked_foods' in data:
+        p.disliked_foods_csv = '|'.join(sorted({x.strip() for x in data.pop('disliked_foods') if x.strip()}))
+    for k,v in data.items():
+        setattr(p, k, v)
+    db.commit(); db.refresh(user); db.refresh(p)
+    return me(user, db)
 
-@app.get("/api/v1/onboarding/status")
-def onboarding_status(user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    return envelope({"complete":ensure_profile(db,user).onboarding_complete})
 
-@app.post("/api/v1/onboarding/complete")
-def onboarding_complete(req:OnboardingCompleteRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    p=ensure_profile(db,user); t=calculate_targets(req)
-    if req.first_name is not None: user.first_name=req.first_name
-    p.date_of_birth=req.date_of_birth; p.gender=req.gender; p.height_cm=req.height_cm; p.weight_kg=req.weight_kg
-    p.target_weight_kg=req.target_weight_kg; p.goal_type=req.goal_type; p.activity_level=req.activity_level; p.daily_budget=req.daily_budget
-    p.severe_allergens_csv="|".join(sorted({x.upper() for x in req.severe_allergens}))
-    p.food_preferences_csv="|".join(sorted({x.strip() for x in req.food_preferences if x.strip()}))
-    p.disliked_foods_csv="|".join(sorted({x.strip() for x in req.disliked_foods if x.strip()}))
-    p.target_calories=t["target_calories"]; p.target_protein_g=t["target_protein_g"]; p.target_carbs_g=t["target_carbs_g"]; p.target_fat_g=t["target_fat_g"]; p.sodium_max_mg=t["sodium_max_mg"]; p.onboarding_complete=True
+
+
+@app.get('/api/v1/onboarding/status')
+def onboarding_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    p = ensure_profile(db, user)
+    return envelope({'complete': p.onboarding_complete})
+
+
+@app.post('/api/v1/onboarding/complete')
+def complete_onboarding(req: OnboardingCompleteRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    p = ensure_profile(db, user)
+    targets = calculate_targets(req)
+
+    if req.first_name is not None:
+        user.first_name = req.first_name
+    p.date_of_birth = req.date_of_birth
+    p.gender = req.gender
+    p.height_cm = req.height_cm
+    p.weight_kg = req.weight_kg
+    p.target_weight_kg = req.target_weight_kg
+    p.goal_type = req.goal_type
+    p.activity_level = req.activity_level
+    p.daily_budget = req.daily_budget
+    p.severe_allergens_csv = '|'.join(sorted({x.upper() for x in req.severe_allergens}))
+    p.food_preferences_csv = '|'.join(sorted({x.strip() for x in req.food_preferences if x.strip()}))
+    p.disliked_foods_csv = '|'.join(sorted({x.strip() for x in req.disliked_foods if x.strip()}))
+    p.target_calories = targets['target_calories']
+    p.target_protein_g = targets['target_protein_g']
+    p.target_carbs_g = targets['target_carbs_g']
+    p.target_fat_g = targets['target_fat_g']
+    p.sodium_max_mg = targets['sodium_max_mg']
+    p.onboarding_complete = True
     db.commit()
-    return envelope({"complete":True,"targets":t,"profile":profile_payload(user,p)["profile"]})
+    db.refresh(p)
+    return envelope({'complete': True, 'targets': targets, 'profile': me(user, db)['data']['profile']})
 
-@app.post("/api/v1/profile/recalculate-plan")
-def recalc(req:PlanRecalculateRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    p=ensure_profile(db,user)
-    for k,v in req.model_dump(exclude_unset=True).items(): setattr(p,k,v)
-    if not p.date_of_birth or not p.gender or not p.height_cm or not p.weight_kg:
-        raise HTTPException(status_code=422,detail="Complete body profile required")
-    calc=OnboardingCompleteRequest(
-        first_name=user.first_name,date_of_birth=p.date_of_birth,gender=p.gender,height_cm=p.height_cm,weight_kg=p.weight_kg,
-        target_weight_kg=p.target_weight_kg,goal_type=p.goal_type,activity_level=p.activity_level,daily_budget=p.daily_budget,
-        severe_allergens=p.severe_allergens(),food_preferences=p.food_preferences(),disliked_foods=p.disliked_foods()
-    )
-    t=calculate_targets(calc)
-    p.target_calories=t["target_calories"]; p.target_protein_g=t["target_protein_g"]; p.target_carbs_g=t["target_carbs_g"]; p.target_fat_g=t["target_fat_g"]; p.sodium_max_mg=t["sodium_max_mg"]
-    db.commit(); return envelope({"targets":t,"profile":profile_payload(user,p)["profile"]})
 
-@app.get("/api/v1/profile/insights")
-def insights(user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+
+
+@app.get('/api/v1/profile/insights')
+def get_profile_insights(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return envelope(profile_insights(db,user))
 
-@app.get("/api/v1/nutrition/today")
-def nutrition_today(user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    req=build_daily_request(db,user)
-    return envelope({"totals":today_totals(db,user.id),"daily_request":req.model_dump(),"daily_state":calculate_daily_state(req).model_dump()})
 
-@app.post("/api/v1/food-log")
-def food_log(req:FoodLogCreateRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    row=FoodLog(user_id=user.id,**req.model_dump()); db.add(row); db.commit(); db.refresh(row)
-    return envelope({"log_id":row.id,"daily_totals":today_totals(db,user.id),"daily_state":calculate_daily_state(build_daily_request(db,user)).model_dump()})
+@app.post('/api/v1/profile/recalculate-plan')
+def recalculate_plan(req: PlanRecalculateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    p=ensure_profile(db,user)
+    if not p.date_of_birth or not p.gender or not p.height_cm or not p.weight_kg:
+        raise HTTPException(status_code=422, detail='Complete body profile required before recalculating plan')
 
-@app.get("/api/v1/food-log/today")
-def food_log_today(user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    start=datetime.now(timezone.utc).replace(tzinfo=None,hour=0,minute=0,second=0,microsecond=0)
-    rows=db.scalars(select(FoodLog).where(FoodLog.user_id==user.id,FoodLog.logged_at>=start).order_by(FoodLog.logged_at)).all()
-    return envelope({"items":[{"id":x.id,"food_id":x.food_id,"food_name":x.food_name,"meal_type":x.meal_type,"entry_method":x.entry_method,"calories":x.calories,"protein_g":x.protein_g,"carbs_g":x.carbs_g,"fat_g":x.fat_g,"sodium_mg":x.sodium_mg,"logged_at":x.logged_at.isoformat()} for x in rows],"totals":today_totals(db,user.id),"daily_state":calculate_daily_state(build_daily_request(db,user)).model_dump()})
+    data=req.model_dump(exclude_unset=True)
+    for key,value in data.items():
+        setattr(p,key,value)
 
-@app.patch("/api/v1/food-log/{log_id}")
-def food_log_update(log_id:str,req:FoodLogUpdateRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    row=db.get(FoodLog,log_id)
-    if not row or row.user_id!=user.id: raise HTTPException(status_code=404,detail="Food log not found")
-    for k,v in req.model_dump(exclude_unset=True).items(): setattr(row,k,v)
-    row.entry_method="USER_EDITED"; db.commit()
-    return envelope({"daily_state":calculate_daily_state(build_daily_request(db,user)).model_dump()})
+    from app.models.schemas import OnboardingCompleteRequest
+    calc_req=OnboardingCompleteRequest(
+        first_name=user.first_name,
+        date_of_birth=p.date_of_birth,
+        gender=p.gender,
+        height_cm=p.height_cm,
+        weight_kg=p.weight_kg,
+        target_weight_kg=p.target_weight_kg,
+        goal_type=p.goal_type,
+        activity_level=p.activity_level,
+        daily_budget=p.daily_budget,
+        severe_allergens=p.severe_allergens(),
+        food_preferences=p.food_preferences(),
+        disliked_foods=p.disliked_foods(),
+    )
+    targets=calculate_targets(calc_req)
+    p.target_calories=targets['target_calories']
+    p.target_protein_g=targets['target_protein_g']
+    p.target_carbs_g=targets['target_carbs_g']
+    p.target_fat_g=targets['target_fat_g']
+    p.sodium_max_mg=targets['sodium_max_mg']
+    db.commit(); db.refresh(p)
+    return envelope({'targets':targets,'profile':me(user,db)['data']['profile']})
 
-@app.delete("/api/v1/food-log/{log_id}")
-def food_log_delete(log_id:str,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    row=db.get(FoodLog,log_id)
-    if not row or row.user_id!=user.id: raise HTTPException(status_code=404,detail="Food log not found")
+
+# -------- Food Log + persisted daily state --------
+@app.post('/api/v1/food-log')
+def add_food_log(req: FoodLogCreateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = FoodLog(user_id=user.id, **req.model_dump())
+    db.add(row); db.commit(); db.refresh(row)
+    return envelope({'log_id': row.id, 'daily_totals': today_totals(db, user.id), 'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump()})
+
+
+@app.get('/api/v1/food-log/today')
+def food_log_today(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = db.scalars(select(FoodLog).where(FoodLog.user_id == user.id, FoodLog.logged_at >= start).order_by(FoodLog.logged_at)).all()
+    return envelope({
+        'items': [
+            {'id':x.id,'food_id':x.food_id,'food_name':x.food_name,'meal_type':x.meal_type,'entry_method':x.entry_method,
+             'calories':x.calories,'protein_g':x.protein_g,'carbs_g':x.carbs_g,'fat_g':x.fat_g,'sodium_mg':x.sodium_mg,
+             'logged_at':x.logged_at.isoformat()} for x in rows
+        ],
+        'totals': today_totals(db, user.id),
+        'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump(),
+    })
+
+
+
+
+@app.patch('/api/v1/food-log/{log_id}')
+def update_food_log(log_id: str, req: FoodLogUpdateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(FoodLog, log_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail='Food log not found')
+    data = req.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(row, key, value)
+    row.entry_method = 'USER_EDITED'
+    db.commit()
+    db.refresh(row)
+    return envelope({
+        'item': {
+            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,
+            'meal_type':row.meal_type,'entry_method':row.entry_method,
+            'calories':row.calories,'protein_g':row.protein_g,'carbs_g':row.carbs_g,
+            'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,'logged_at':row.logged_at.isoformat(),
+        },
+        'totals': today_totals(db,user.id),
+        'daily_state': calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
+
+@app.delete('/api/v1/food-log/{log_id}')
+def delete_food_log(log_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    row = db.get(FoodLog, log_id)
+    if not row or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail='Food log not found')
     db.delete(row); db.commit()
-    return envelope({"deleted":True,"daily_state":calculate_daily_state(build_daily_request(db,user)).model_dump()})
+    return envelope({'deleted': True, 'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump()})
 
-@app.post("/api/v1/food-log/from-catalog")
-def food_log_from_catalog(req:CatalogFoodLogRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    food=db.get(FoodItem,req.food_id)
-    if not food or not food.nutrition: raise HTTPException(status_code=404,detail="Food item not found")
-    row=log_catalog_food(db,user,food,req.meal_type,req.quantity,req.entry_method)
-    return envelope({"log":{"id":row.id,"food_id":row.food_id,"food_name":row.food_name,"meal_type":row.meal_type,"calories":row.calories},"daily_totals":today_totals(db,user.id),"daily_state":calculate_daily_state(build_daily_request(db,user)).model_dump()})
 
-@app.get("/api/v1/foods/search")
-def foods_search(q:Optional[str]=None,vendor:Optional[str]=None,category:Optional[str]=None,max_calories:Optional[float]=None,min_protein_g:Optional[float]=None,limit:int=25,db:Session=Depends(get_db)):
-    rows=query_foods(db,vendor=vendor,category=category,q=q,max_calories=max_calories,min_protein_g=min_protein_g,limit=limit)
-    return envelope({"items":[serialize_food(x) for x in rows],"count":len(rows)})
+@app.get('/api/v1/nutrition/today')
+def nutrition_today(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return envelope({'totals': today_totals(db,user.id), 'daily_request': build_daily_request(db,user).model_dump(), 'daily_state': calculate_daily_state(build_daily_request(db,user)).model_dump()})
 
-@app.get("/api/v1/foods/{food_id}")
-def food_detail(food_id:str,db:Session=Depends(get_db)):
-    food=db.get(FoodItem,food_id)
-    if not food: raise HTTPException(status_code=404,detail="Food item not found")
-    return envelope(serialize_food(food))
 
-@app.get("/api/v1/foods/barcode/{barcode}")
-def barcode(barcode:str,db:Session=Depends(get_db)):
-    item=db.scalar(select(FoodItem).where(FoodItem.barcode==barcode))
-    return envelope({"found":bool(item),"item":serialize_food(item) if item else None,"allow_submission":not bool(item)})
+# -------- Unified Food Catalog --------
+@app.get('/api/v1/foods/search')
+def food_search(q: Optional[str] = None, vendor: Optional[str] = None, category: Optional[str] = None,
+                max_calories: Optional[float] = None, min_protein_g: Optional[float] = None, limit: int = 25,
+                db: Session = Depends(get_db)):
+    rows = query_foods(db, vendor=vendor, category=category, q=q, max_calories=max_calories, min_protein_g=min_protein_g, limit=limit)
+    return envelope({'items':[serialize_food(x) for x in rows], 'count':len(rows)})
 
-@app.post("/api/v1/recommendations/for-me")
-def recommendations(req:UserRecommendationRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
+
+@app.get('/api/v1/foods/{food_id}')
+def food_detail(food_id: str, db: Session = Depends(get_db)):
+    item = db.get(FoodItem, food_id)
+    if not item:
+        raise HTTPException(status_code=404, detail='Food item not found')
+    return envelope(serialize_food(item))
+
+
+@app.get('/api/v1/foods/barcode/{barcode}')
+def food_by_barcode(barcode: str, db: Session = Depends(get_db)):
+    item = db.scalar(select(FoodItem).where(FoodItem.barcode == barcode))
+    return envelope({'found': bool(item), 'item': serialize_food(item) if item else None, 'allow_submission': not bool(item)})
+
+
+# -------- Natural-language craving --------
+class CravingRequest(BaseModel):
+    text: str
+
+
+@app.post('/api/v1/cravings/parse')
+def parse_craving(req: CravingRequest):
+    t = req.text.lower().strip()
+    restaurant: Optional[str] = None
+    if 'هارديز' in t or 'hardee' in t:
+        restaurant = "Hardee's UAE"
+    elif 'كي اف سي' in t or 'كي إف سي' in t or 'kfc' in t:
+        restaurant = 'KFC UAE'
+    elif 'ماكدونالد' in t or 'mcdonald' in t:
+        restaurant = "McDonald's UAE"
+
+    category: Optional[str] = None
+    if any(x in t for x in ['برغر','برجر','burger','زنجر','zinger']): category = 'BURGERS'
+    elif any(x in t for x in ['بيتزا','pizza']): category = 'PIZZA'
+    elif any(x in t for x in ['حلا','حلويات','dessert','sweet']): category = 'DESSERT'
+
+    max_calories = None
+    for p in [r'(?:تحت|اقل من|أقل من|under|below)\s*(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)?', r'(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)']:
+        m = re.search(p,t)
+        if m:
+            max_calories=float(m.group(1)); break
+
+    confidence = min(.99, .5 + (.2 if restaurant else 0)+(.2 if category else 0)+(.1 if max_calories else 0))
+    return envelope({'intent':'EAT_NOW','restaurant':restaurant,'food_category':category,'max_calories':max_calories,'confidence':confidence})
+
+
+# -------- Stateless compatibility endpoints --------
+@app.post('/api/v1/daily-state/calculate')
+def daily_state(req: DailyStateRequest): return envelope(calculate_daily_state(req).model_dump())
+
+@app.post('/api/v1/recommendations/now')
+def recommendations(req: RecommendationRequest, db: Session = Depends(get_db)):
+    return envelope(recommend_now(db, req))
+
+
+# -------- Persisted recommendation endpoint --------
+@app.post('/api/v1/recommendations/for-me')
+def recommendations_for_me(req: UserRecommendationRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return envelope(recommend_for_user(db,user,req.vendor,req.category,req.max_calories,req.budget_max,req.allow_modifications))
 
-@app.post("/api/v1/recommendations/feedback")
-def feedback(req:RecommendationFeedbackRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    if not db.get(FoodItem,req.food_id): raise HTTPException(status_code=404,detail="Food item not found")
-    row=RecommendationFeedback(user_id=user.id,food_id=req.food_id,action=req.action); db.add(row); db.commit()
-    return envelope({"saved":True,"food_id":req.food_id,"action":req.action})
 
-def parse_craving(text:str):
-    t=text.lower(); restaurant=None; category=None
-    if "هارديز" in t or "hardee" in t: restaurant="Hardee's UAE"
-    elif "كي اف سي" in t or "كي إف سي" in t or "kfc" in t: restaurant="KFC UAE"
-    elif "ماكدونالد" in t or "mcdonald" in t: restaurant="McDonald's UAE"
-    if any(x in t for x in ["برغر","برجر","burger","زنجر","zinger"]): category="BURGERS"
-    return restaurant,category,None
 
-@app.post("/api/v1/golden-flow")
-def golden(req:GoldenFlowRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    restaurant,category,max_calories=parse_craving(req.craving_text)
-    recs=recommend_for_user(db,user,restaurant,category,max_calories,None,req.allow_modifications)
-    return envelope({"parsed_intent":{"intent":"EAT_NOW","restaurant":restaurant,"food_category":category,"max_calories":max_calories},"logged":None,"daily_totals":today_totals(db,user.id),"daily_state":calculate_daily_state(build_daily_request(db,user)).model_dump(),"recommendations":recs})
 
-@app.get("/api/v1/rebalance/for-me")
-def rebalance(user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    state=calculate_daily_state(build_daily_request(db,user))
-    recs=recommend_for_user(db,user,max_calories=state.remaining_calories if state.remaining_calories>0 else None)
-    return envelope({"daily_totals":today_totals(db,user.id),"daily_state":state.model_dump(),"headline":"تم تحديث يومك","message":f"باقي تقريبًا {state.remaining_calories:.0f} سعرة.","next_options":recs.get("results",[])[:5]})
+@app.post('/api/v1/recommendations/feedback')
+def recommendation_feedback(req: RecommendationFeedbackRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not db.get(FoodItem, req.food_id):
+        raise HTTPException(status_code=404, detail='Food item not found')
+    row=RecommendationFeedback(user_id=user.id, food_id=req.food_id, action=req.action)
+    db.add(row); db.commit(); db.refresh(row)
+    return envelope({'saved':True,'food_id':req.food_id,'action':req.action})
 
-@app.post("/api/v1/food-log/parse-text")
-def parse_text(req:TextFoodParseRequest,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    words=[x for x in re.sub(r"[^\w\u0600-\u06FF\s]+"," ",req.text).split() if len(x)>=2]
-    found=[]; seen=set()
-    for q in words:
-        for item in query_foods(db,q=q,limit=8):
+@app.post('/api/v1/recommendations/make-it-fit')
+def make_fit(req: MakeItFitRequest, db: Session = Depends(get_db)):
+    try: return envelope(make_it_fit(db, req))
+    except ValueError as exc:
+        if str(exc) == 'FOOD_NOT_FOUND': raise HTTPException(status_code=404, detail='Food item not found')
+        raise
+
+@app.post('/api/v1/day/rebalance')
+def rebalance(req: RebalanceRequest): return envelope(rebalance_day(req))
+
+
+
+@app.post('/api/v1/food-log/from-catalog')
+def add_food_log_from_catalog(req: CatalogFoodLogRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    food = db.get(FoodItem, req.food_id)
+    if not food:
+        raise HTTPException(status_code=404, detail='Food item not found')
+    if not food.nutrition or food.nutrition.calories is None:
+        raise HTTPException(status_code=422, detail='Food nutrition unavailable')
+    row = log_catalog_food(db, user, food, req.meal_type, req.quantity, req.entry_method)
+    state = calculate_daily_state(build_daily_request(db, user)).model_dump()
+    return envelope({
+        'log': {
+            'id': row.id, 'food_id': row.food_id, 'food_name': row.food_name,
+            'meal_type': row.meal_type, 'quantity': req.quantity, 'calories': row.calories,
+            'protein_g': row.protein_g, 'carbs_g': row.carbs_g, 'fat_g': row.fat_g, 'sodium_mg': row.sodium_mg
+        },
+        'daily_totals': today_totals(db, user.id),
+        'daily_state': state,
+    })
+
+
+def _parse_craving_payload(text: str):
+    t = text.lower().strip()
+    restaurant = None
+    if 'هارديز' in t or 'hardee' in t:
+        restaurant = "Hardee's UAE"
+    elif 'كي اف سي' in t or 'كي إف سي' in t or 'kfc' in t:
+        restaurant = 'KFC UAE'
+    elif 'ماكدونالد' in t or 'mcdonald' in t:
+        restaurant = "McDonald's UAE"
+
+    category = None
+    if any(x in t for x in ['برغر','برجر','burger','زنجر','zinger']):
+        category = 'BURGERS'
+    elif any(x in t for x in ['بيتزا','pizza']):
+        category = 'PIZZA'
+    elif any(x in t for x in ['حلا','حلويات','dessert','sweet']):
+        category = 'DESSERT'
+
+    max_calories = None
+    for p in [r'(?:تحت|اقل من|أقل من|under|below)\s*(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)?', r'(\d{2,4})\s*(?:سعرة|سعره|kcal|calories)']:
+        m = re.search(p,t)
+        if m:
+            max_calories=float(m.group(1)); break
+    return restaurant, category, max_calories
+
+
+@app.post('/api/v1/golden-flow')
+def golden_flow(req: GoldenFlowRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    restaurant, category, max_calories = _parse_craving_payload(req.craving_text)
+
+    logged = None
+    if req.auto_log_food_id:
+        food = db.get(FoodItem, req.auto_log_food_id)
+        if not food:
+            raise HTTPException(status_code=404, detail='Food item not found')
+        logged_row = log_catalog_food(db, user, food, req.meal_type, req.quantity, 'RECOMMENDATION')
+        logged = {
+            'log_id': logged_row.id,
+            'food_id': logged_row.food_id,
+            'food_name': logged_row.food_name,
+            'calories': logged_row.calories,
+        }
+
+    recommendations = recommend_for_user(
+        db, user,
+        vendor=restaurant,
+        category=category,
+        max_calories=max_calories,
+        allow_modifications=req.allow_modifications
+    )
+
+    return envelope({
+        'parsed_intent': {
+            'intent':'EAT_NOW',
+            'restaurant': restaurant,
+            'food_category': category,
+            'max_calories': max_calories,
+        },
+        'logged': logged,
+        'daily_totals': today_totals(db, user.id),
+        'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump(),
+        'recommendations': recommendations,
+    })
+
+MAKE_IT_FIT_COMPONENTS = [
+    {'component':'REGULAR_PEPSI_453ML','label_ar':'استبدال البيبسي العادي بدايت بيبسي','label_en':'Replace Regular Pepsi with Diet Pepsi','modifier_id':'KFC-MOD-001'},
+    {'component':'MEDIUM_FRIES','label_ar':'تصغير البطاطس الوسط إلى عادي','label_en':'Medium Fries to Regular Fries','modifier_id':'KFC-MOD-002'},
+    {'component':'LARGE_FRIES','label_ar':'تصغير البطاطس الكبير إلى عادي','label_en':'Large Fries to Regular Fries','modifier_id':'KFC-MOD-003'},
+    {'component':'DYNAMITE_SAUCE_DIP','label_ar':'إزالة صوص الديناميت','label_en':'Remove Dynamite Sauce Dip','modifier_id':'KFC-MOD-004'},
+    {'component':'RANCH_SAUCE_DIP','label_ar':'إزالة صوص كنتاكي رانش','label_en':'Remove Kentucky Ranch Dip','modifier_id':'KFC-MOD-005'},
+]
+
+@app.get('/api/v1/foods/{food_id}/make-it-fit-options')
+def make_it_fit_options(food_id: str, db: Session = Depends(get_db)):
+    food=db.get(FoodItem,food_id)
+    if not food:
+        raise HTTPException(status_code=404,detail='Food item not found')
+    if food.vendor_name!='KFC UAE':
+        return envelope({'food_id':food_id,'options':[],'note':'No verified modifier set is available for this vendor yet.'})
+    options=[]
+    for spec in MAKE_IT_FIT_COMPONENTS:
+        modifier=db.get(FoodModifier,spec['modifier_id'])
+        if modifier:
+            options.append({
+                **spec,
+                'calorie_delta':modifier.calorie_delta,
+                'protein_delta_g':modifier.protein_delta_g,
+                'carbs_delta_g':modifier.carbs_delta_g,
+                'fat_delta_g':modifier.fat_delta_g,
+                'sodium_delta_mg':modifier.sodium_delta_mg,
+                'confidence':modifier.confidence_level,
+            })
+    return envelope({
+        'food_id':food_id,
+        'options':options,
+        'note':'Select only components actually included in your meal. Wazen does not assume sides, drinks or sauces.'
+    })
+
+@app.post('/api/v1/food-log/from-modified-catalog')
+def add_modified_catalog_food(req: ModifiedCatalogFoodLogRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    fit=make_it_fit(db,MakeItFitRequest(
+        food_id=req.food_id,
+        daily_state=build_daily_request(db,user),
+        included_components=req.included_components,
+    ))
+    food=db.get(FoodItem,req.food_id)
+    n=fit['modified_nutrition']; q=float(req.quantity)
+    row=log_nutrition_snapshot(
+        db,user,req.food_id,
+        (food.name_en or food.name_ar or req.food_id)+(' - Modified' if fit['applied_modifications'] else ''),
+        req.meal_type,
+        (n['calories'] or 0)*q,
+        (n['protein_g'] or 0)*q,
+        (n['carbs_g'] or 0)*q,
+        (n['fat_g'] or 0)*q,
+        (n['sodium_mg'] or 0)*q,
+    )
+    return envelope({
+        'log':{
+            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,
+            'meal_type':row.meal_type,'quantity':q,'calories':row.calories,
+            'protein_g':row.protein_g,'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
+        },
+        'make_it_fit':fit,
+        'daily_totals':today_totals(db,user.id),
+        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+    })
+
+
+
+@app.get('/api/v1/rebalance/for-me')
+def rebalance_for_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    daily_req = build_daily_request(db, user)
+    state = calculate_daily_state(daily_req)
+    recs = recommend_for_user(
+        db, user,
+        vendor=None,
+        category=None,
+        max_calories=state.remaining_calories if state.remaining_calories > 0 else None,
+        budget_max=None,
+        allow_modifications=True,
+    )
+    # Keep the response useful and compact for the post-meal screen.
+    next_options = recs.get('results', [])[:5]
+    if state.remaining_calories <= 0:
+        headline = 'تم تحديث يومك'
+        message = 'وصلت أو تجاوزت هدف السعرات الحالي. ما في مشكلة — نقدر نخلي باقي اليوم أخف حسب احتياجك.'
+    elif state.protein_gap_g > 20:
+        headline = 'باقي لك بروتين اليوم'
+        message = f'باقي تقريبًا {state.remaining_calories:.0f} سعرة و{state.protein_gap_g:.0f}g بروتين. هذه أقرب الخيارات للمتبقي.'
+    else:
+        headline = 'يومك متوازن'
+        message = f'باقي تقريبًا {state.remaining_calories:.0f} سعرة. هذه خيارات تناسب المساحة المتبقية.'
+    return envelope({
+        'daily_totals': today_totals(db, user.id),
+        'daily_state': state.model_dump(),
+        'headline': headline,
+        'message': message,
+        'next_options': next_options,
+    })
+
+
+
+TEXT_STOPWORDS = {
+    'اكلت','أكلت','اكل','أكل','ابي','أبي','ابغى','أبغى','اريد','أريد','من','مع','و','في','على',
+    'وجبة','سناك','فطور','غداء','عشاء','calories','kcal','سعرة','سعره','g','جرام'
+}
+
+TEXT_ALIASES = {
+    'زينجر':'Zinger', 'زنجر':'Zinger',
+    'بيج ماك':'Big Mac', 'بج ماك':'Big Mac',
+    'ماك تشيكن':'McChicken', 'تشيكن':'Chicken',
+    'برغر':'Burger', 'برجر':'Burger',
+    'بطاطس':'Fries', 'فرايز':'Fries',
+    'ناجتس':'Nuggets', 'نقتس':'Nuggets',
+}
+VENDOR_ALIASES = {
+    'kfc':'KFC UAE', 'كي اف سي':'KFC UAE', 'كي إف سي':'KFC UAE',
+    'mcdonald':'McDonald\'s UAE', 'ماكدونالد':'McDonald\'s UAE', 'ماكدونالدز':'McDonald\'s UAE',
+    'hardee':'Hardee\'s UAE', 'هارديز':'Hardee\'s UAE',
+}
+
+def _text_catalog_candidates(db: Session, text: str, limit: int = 8):
+    cleaned = re.sub(r'[^\w\u0600-\u06FF\s]+',' ',text.lower())
+    vendor = next((v for k,v in VENDOR_ALIASES.items() if k in cleaned), None)
+    tokens = [x for x in cleaned.split() if len(x) >= 2 and x not in TEXT_STOPWORDS and not x.isdigit()]
+    alias_queries = [eng for ar,eng in TEXT_ALIASES.items() if ar in cleaned]
+    seen, items = set(), []
+    queries = alias_queries + sorted(tokens, key=len, reverse=True)
+    for q in queries:
+        for item in query_foods(db, vendor=vendor, q=q, limit=limit):
             if item.id not in seen:
-                seen.add(item.id); found.append(serialize_food(item))
-    return envelope({"input":req.text,"meal_type":req.meal_type,"status":"MATCHES_FOUND" if found else "REVIEW_REQUIRED","candidates":found[:8],"confidence":"CATALOG_MATCH" if found else "UNKNOWN"})
+                seen.add(item.id)
+                items.append(serialize_food(item))
+                if len(items) >= limit:
+                    return items
+    # If text identified a vendor but not an item, return a small vendor shortlist for review.
+    if vendor and not items:
+        for item in query_foods(db, vendor=vendor, limit=limit):
+            if item.id not in seen:
+                items.append(serialize_food(item)); seen.add(item.id)
+    return items
 
-class ImageReq(BaseModel):
-    image_base64:str
-    user_caption:Optional[str]=None
-    meal_type:str="SNACK"
+@app.post('/api/v1/food-log/parse-text')
+def parse_food_text(req: TextFoodParseRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    items = _text_catalog_candidates(db, req.text)
+    return envelope({
+        'input': req.text,
+        'meal_type': req.meal_type,
+        'status': 'MATCHES_FOUND' if items else 'REVIEW_REQUIRED',
+        'candidates': items,
+        'confidence': 'CATALOG_MATCH' if items else 'UNKNOWN',
+        'note': 'Choose the correct item before saving. Wazen does not auto-log an ambiguous text match.'
+    })
 
-@app.post("/api/v1/food-log/analyze-image")
-def image_analysis(req:ImageReq,user:User=Depends(get_current_user),db:Session=Depends(get_db)):
-    return envelope({"status":"REVIEW_REQUIRED","analysis_provider":"NOT_CONFIGURED","meal_type":req.meal_type,"candidates":[],"vision_result":None,"confidence":"UNKNOWN","note":"Image AI will be enabled after the first alpha deployment."})
+@app.post('/api/v1/food-log/analyze-image')
+def analyze_food_image_endpoint(req: ImageFoodAnalyzeRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    candidates = _text_catalog_candidates(db, req.user_caption or '') if req.user_caption else []
+    try:
+        analysis = analyze_food_image(req.image_base64, req.user_caption)
+    except Exception as exc:
+        return envelope({
+            'status':'REVIEW_REQUIRED',
+            'analysis_provider':'ERROR',
+            'meal_type':req.meal_type,
+            'candidates':candidates,
+            'vision_result':None,
+            'confidence':'UNKNOWN',
+            'note':f'Vision analysis unavailable: {type(exc).__name__}. Nothing was logged automatically.'
+        })
+
+    if analysis['provider']=='NOT_CONFIGURED':
+        return envelope({
+            'status':'REVIEW_REQUIRED',
+            'analysis_provider':'NOT_CONFIGURED',
+            'meal_type':req.meal_type,
+            'candidates':candidates,
+            'vision_result':None,
+            'confidence':'AI_ESTIMATE' if candidates else 'UNKNOWN',
+            'note':'Set OPENAI_API_KEY to enable image understanding. Nothing is logged until the user confirms.'
+        })
+
+    return envelope({
+        'status':'REVIEW_REQUIRED',
+        'analysis_provider':analysis['provider'],
+        'analysis_model':analysis['model'],
+        'meal_type':req.meal_type,
+        'candidates':candidates,
+        'vision_result':analysis.get('result'),
+        'confidence':'AI_ESTIMATE',
+        'note':'Image nutrition is an AI estimate. Review portions and values before saving.'
+    })
