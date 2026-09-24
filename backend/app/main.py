@@ -35,13 +35,14 @@ from app.services.auth_sessions import issue_session, rotate_session, revoke_ses
 from app.services.goal_history import add_goal_snapshot, list_goal_history
 from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
+from app.services.natural_language import parse_natural_food_text
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.2.0')
+app = FastAPI(title='WAZEN API', version='1.3.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +60,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.2.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.3.0'})
 
 
 # -------- Authentication --------
@@ -842,15 +843,9 @@ def _text_catalog_candidates(db: Session, text: str, limit: int = 8):
 
 @app.post('/api/v1/food-log/parse-text')
 def parse_food_text(req: TextFoodParseRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    items = _text_catalog_candidates(db, req.text)
-    return envelope({
-        'input': req.text,
-        'meal_type': req.meal_type,
-        'status': 'MATCHES_FOUND' if items else 'REVIEW_REQUIRED',
-        'candidates': items,
-        'confidence': 'CATALOG_MATCH' if items else 'UNKNOWN',
-        'note': 'Choose the correct item before saving. Wazen does not auto-log an ambiguous text match.'
-    })
+    data=parse_natural_food_text(db,req.text)
+    data['meal_type']=req.meal_type
+    return envelope(data)
 
 @app.post('/api/v1/food-log/analyze-image')
 def analyze_food_image_endpoint(req: ImageFoodAnalyzeRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
