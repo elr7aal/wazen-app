@@ -1,0 +1,11 @@
+{
+  "name": "wazen-web",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "serve -s web-dist -l $PORT"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}
