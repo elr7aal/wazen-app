@@ -2,6 +2,7 @@ import re
 import os
 import secrets
 from typing import Optional, Any, Literal
+from datetime import date
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -27,13 +28,14 @@ from app.services.vision import analyze_food_image
 from app.services.onboarding import calculate_targets
 from app.services.profile_insights import profile_insights
 from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods
+from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='0.5.0')
+app = FastAPI(title='WAZEN API', version='0.6.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,7 +53,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.5.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.6.0'})
 
 
 # -------- Authentication --------
@@ -110,6 +112,8 @@ def update_me(req: ProfileUpdateRequest, user: User = Depends(get_current_user),
         p.disliked_foods_csv = '|'.join(sorted({x.strip() for x in data.pop('disliked_foods') if x.strip()}))
     for k,v in data.items():
         setattr(p, k, v)
+    if req.weight_kg is not None:
+        record_weight(db, user.id, req.weight_kg)
     db.commit(); db.refresh(user); db.refresh(p)
     return me(user, db)
 
@@ -146,6 +150,7 @@ def complete_onboarding(req: OnboardingCompleteRequest, user: User = Depends(get
     p.target_fat_g = targets['target_fat_g']
     p.sodium_max_mg = targets['sodium_max_mg']
     p.onboarding_complete = True
+    record_weight(db, user.id, req.weight_kg)
     db.commit()
     db.refresh(p)
     return envelope({'complete': True, 'targets': targets, 'profile': me(user, db)['data']['profile']})
@@ -189,6 +194,7 @@ def recalculate_plan(req: PlanRecalculateRequest, user: User = Depends(get_curre
     p.target_carbs_g=targets['target_carbs_g']
     p.target_fat_g=targets['target_fat_g']
     p.sodium_max_mg=targets['sodium_max_mg']
+    record_weight(db, user.id, p.weight_kg)
     db.commit(); db.refresh(p)
     return envelope({'targets':targets,'profile':me(user,db)['data']['profile']})
 
@@ -716,3 +722,63 @@ def admin_audit(
         } for x in rows],
         'count': len(rows),
     })
+
+
+
+# -------- Weekly Plan + Progress (v17) --------
+@app.get('/api/v1/plan/week')
+def weekly_plan(
+    start_date: Optional[date] = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return envelope(get_or_generate_week(db, user, start_date))
+    except ValueError as exc:
+        if str(exc) == 'PROFILE_REQUIRED':
+            raise HTTPException(status_code=422, detail='Complete profile required')
+        if str(exc) == 'NO_ELIGIBLE_FOODS':
+            raise HTTPException(status_code=422, detail='No eligible foods available for this profile')
+        raise
+
+
+@app.post('/api/v1/plan/week/generate')
+def regenerate_weekly_plan(
+    start_date: Optional[date] = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return envelope(generate_week(db, user, start_date or week_start_for(), replace=True))
+    except ValueError as exc:
+        if str(exc) == 'PROFILE_REQUIRED':
+            raise HTTPException(status_code=422, detail='Complete profile required')
+        if str(exc) == 'NO_ELIGIBLE_FOODS':
+            raise HTTPException(status_code=422, detail='No eligible foods available for this profile')
+        raise
+
+
+@app.post('/api/v1/plan/day/{plan_date}/rebalance')
+def rebalance_weekly_plan_day(
+    plan_date: date,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return envelope(rebalance_plan_day(db, user, plan_date))
+    except ValueError as exc:
+        if str(exc) == 'PROFILE_REQUIRED':
+            raise HTTPException(status_code=422, detail='Complete profile required')
+        if str(exc) == 'NO_ELIGIBLE_FOODS':
+            raise HTTPException(status_code=422, detail='No eligible foods available for this profile')
+        raise
+
+
+@app.get('/api/v1/progress')
+def get_progress(
+    range: Literal['week', 'month', '3months'] = 'week',
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    days = {'week': 7, 'month': 30, '3months': 90}[range]
+    return envelope(progress_summary(db, user, days))
