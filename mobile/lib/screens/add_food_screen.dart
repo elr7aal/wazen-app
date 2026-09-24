@@ -106,15 +106,38 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
     setState(()=>loading=true);
     try{
       final bytes=await File(file.path).readAsBytes();
-      final data=await WazenApi.instance.analyzeFoodImage(base64Encode(bytes),caption:caption.text.trim().isEmpty?null:caption.text.trim(),mealType:meal);
-      final c=((data['candidates'] as List?)??const []).map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
+      final data=await WazenApi.instance.analyzeFoodImage(
+        base64Encode(bytes),
+        caption:caption.text.trim().isEmpty?null:caption.text.trim(),
+        mealType:meal,
+      );
       final vr=data['vision_result'];
       if(mounted)setState(()=>visionResult=vr is Map?Map<String,dynamic>.from(vr):null);
-      await showResults(c,data['analysis_provider']=='NOT_CONFIGURED'
-          ? 'تحليل الصورة يحتاج OPENAI_API_KEY في الخادم. ما سجلنا أي شيء تلقائي.'
-          : data['analysis_provider']=='ERROR'
-            ? 'تعذر تحليل الصورة الآن. تقدر تستخدم الوصف أو البحث.'
-            : 'AI Estimate: راجع الأصناف والكميات والقيم قبل الحفظ.');
+
+      final rows=((data['items'] as List?)??const []);
+      if(rows.isNotEmpty&&mounted){
+        final provider=(data['analysis_provider']??'UNKNOWN').toString();
+        final saved=await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder:(_)=>TextParsePreviewScreen(
+              parsed:data,
+              mealType:meal,
+              title:'راجع تحليل الصورة',
+              intro:provider=='NOT_CONFIGURED'
+                ?'الصورة نفسها لم تُحلل لأن مزود Vision غير مفعّل. المعروض أدناه مبني فقط على الوصف الذي كتبته، وولا عنصر ينحفظ تلقائيًا.'
+                :'تحليل الصورة تقديري. راجع كل صنف والمطابقة والكمية؛ العناصر منخفضة الثقة تحتاج منك تأكيدًا صريحًا.',
+            ),
+          ),
+        );
+        if(saved==true&&mounted)Navigator.pop(context,true);
+      }else if(mounted){
+        setState(()=>message=data['analysis_provider']=='NOT_CONFIGURED'
+          ?'تحليل الصورة غير مفعّل حاليًا، وما عندنا وصف نصي قابل للمطابقة. ما تم حفظ أي شيء.'
+          :data['analysis_provider']=='ERROR'
+            ?'تعذر تحليل الصورة الآن. ما تم حفظ أي شيء.'
+            :'ما قدرنا نحدد عناصر قابلة للمراجعة من الصورة. ما تم حفظ أي شيء.');
+      }
     }finally{if(mounted)setState(()=>loading=false);}
   }
 
