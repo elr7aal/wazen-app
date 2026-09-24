@@ -27,12 +27,35 @@ UNIT_ALIASES = {
     'ml': 'ML',
     'مل': 'ML',
 }
+VENDOR_ALIASES = {
+    'kfc': 'KFC UAE',
+    'كي اف سي': 'KFC UAE',
+    'كي إف سي': 'KFC UAE',
+    'mcdonald': "McDonald's UAE",
+    'mcdonalds': "McDonald's UAE",
+    'ماكدونالد': "McDonald's UAE",
+    'ماكدونالدز': "McDonald's UAE",
+    'hardee': "Hardee's UAE",
+    'hardees': "Hardee's UAE",
+    'هارديز': "Hardee's UAE",
+}
+STOPWORDS = {
+    'اكلت','أكلت','اكل','أكل','ابي','أبي','ابغى','أبغى','اريد','أريد',
+    'من','مع','في','على','وجبة','وجبه','meal','ate','eat','from','with',
+    'a','an','the','please',
+}
+
 
 def _split_items(text: str) -> list[str]:
     clean=' '.join((text or '').strip().split())
     if not clean:
         return []
-    parts=re.split(r'\s+(?:and\s+|و\s+|و(?=[\u0600-\u06FF]))|[,،;+]',clean,flags=re.IGNORECASE)
+    # Supports: "و كوب", "وكوب", "و2 كوب", English "and", and punctuation.
+    parts=re.split(
+        r'\s+(?:and\s+|و\s+|و(?=[\u0600-\u06FF0-9]))|[,،;+]',
+        clean,
+        flags=re.IGNORECASE,
+    )
     return [x.strip() for x in parts if x and x.strip()]
 
 
@@ -42,7 +65,10 @@ def _portion(segment: str) -> tuple[float,str,str]:
     unit='SERVING'
     cleaned=segment
 
-    m=re.search(r'(?<!\w)(\d+(?:\.\d+)?)\s*(كوب|كاسة|كاس|علبة|حبة|حبه|طبق|ساندويتش|سندويتش|جرام|غرام|g|ml|مل)?\b',lower)
+    m=re.search(
+        r'(?<!\w)(\d+(?:\.\d+)?)\s*(كوب|كاسة|كاس|علبة|حبة|حبه|طبق|ساندويتش|سندويتش|جرام|غرام|g|ml|مل)?\b',
+        lower,
+    )
     if m:
         quantity=float(m.group(1))
         if m.group(2):
@@ -55,6 +81,7 @@ def _portion(segment: str) -> tuple[float,str,str]:
                 quantity=value
                 cleaned=(segment[:fm.start()]+segment[fm.end():]).strip()
                 break
+
         for word,normalized in UNIT_ALIASES.items():
             um=re.search(rf'(?<!\w){re.escape(word)}(?!\w)',cleaned.lower())
             if um:
@@ -66,15 +93,43 @@ def _portion(segment: str) -> tuple[float,str,str]:
     return quantity,unit,cleaned or segment.strip()
 
 
-def parse_natural_food_text(db: Session,text: str,limit_per_item: int=4) -> dict[str,Any]:
+def _vendor_and_query(text: str) -> tuple[str | None,str]:
+    lower=text.lower()
+    vendor=None
+    cleaned=lower
+
+    # Long aliases first so "كي اف سي" is removed as one phrase.
+    for alias,name in sorted(VENDOR_ALIASES.items(),key=lambda x:len(x[0]),reverse=True):
+        if alias.lower() in cleaned:
+            vendor=name
+            cleaned=cleaned.replace(alias.lower(),' ')
+
+    tokens=[
+        token for token in re.split(r'\s+',cleaned)
+        if token and token not in STOPWORDS
+    ]
+    return vendor,' '.join(tokens).strip()
+
+
+def parse_natural_food_text(db: Session,text: str,limit_per_item: int=8) -> dict[str,Any]:
     segments=_split_items(text)
     items=[]
     flat=[]
     seen=set()
+
     for index,segment in enumerate(segments):
-        quantity,unit,query=_portion(segment)
-        candidates=query_foods(db,q=query,limit=limit_per_item)
+        quantity,unit,portion_cleaned=_portion(segment)
+        vendor,query=_vendor_and_query(portion_cleaned)
+        query=query or portion_cleaned.strip()
+
+        candidates=query_foods(
+            db,
+            vendor=vendor,
+            q=query,
+            limit=limit_per_item,
+        )
         serialized=[serialize_food(x) for x in candidates]
+
         for food in serialized:
             if food['food_id'] not in seen:
                 seen.add(food['food_id'])
@@ -89,12 +144,13 @@ def parse_natural_food_text(db: Session,text: str,limit_per_item: int=4) -> dict
                 str(top.get('name_ar') or ''),
                 str(top.get('category') or ''),
             ]).lower()
-            confidence='HIGH' if q and q in names else 'MEDIUM'
+            confidence='HIGH' if q and any(token in names for token in q.split()) else 'MEDIUM'
 
         items.append({
             'index':index,
             'raw_text':segment,
             'query_text':query,
+            'vendor':vendor,
             'estimated_quantity':quantity,
             'estimated_unit':unit,
             'confidence':confidence,
