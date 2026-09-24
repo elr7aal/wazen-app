@@ -36,13 +36,14 @@ from app.services.goal_history import add_goal_snapshot, list_goal_history
 from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
 from app.services.natural_language import parse_natural_food_text
+from app.services.vision_review import build_vision_review
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.3.0')
+app = FastAPI(title='WAZEN API', version='1.4.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,7 +61,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.3.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.4.0'})
 
 
 # -------- Authentication --------
@@ -849,15 +850,19 @@ def parse_food_text(req: TextFoodParseRequest, user: User = Depends(get_current_
 
 @app.post('/api/v1/food-log/analyze-image')
 def analyze_food_image_endpoint(req: ImageFoodAnalyzeRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    candidates = _text_catalog_candidates(db, req.user_caption or '') if req.user_caption else []
+    caption_preview=parse_natural_food_text(db, req.user_caption) if req.user_caption else None
     try:
         analysis = analyze_food_image(req.image_base64, req.user_caption)
     except Exception as exc:
         return envelope({
             'status':'REVIEW_REQUIRED',
             'analysis_provider':'ERROR',
+            'image_analyzed':False,
             'meal_type':req.meal_type,
-            'candidates':candidates,
+            'preview_required':True,
+            'auto_saved':False,
+            'items':caption_preview['items'] if caption_preview else [],
+            'candidates':caption_preview['candidates'] if caption_preview else [],
             'vision_result':None,
             'confidence':'UNKNOWN',
             'note':f'Vision analysis unavailable: {type(exc).__name__}. Nothing was logged automatically.'
@@ -867,22 +872,27 @@ def analyze_food_image_endpoint(req: ImageFoodAnalyzeRequest, user: User = Depen
         return envelope({
             'status':'REVIEW_REQUIRED',
             'analysis_provider':'NOT_CONFIGURED',
+            'image_analyzed':False,
             'meal_type':req.meal_type,
-            'candidates':candidates,
+            'preview_required':True,
+            'auto_saved':False,
+            'items':caption_preview['items'] if caption_preview else [],
+            'candidates':caption_preview['candidates'] if caption_preview else [],
             'vision_result':None,
-            'confidence':'AI_ESTIMATE' if candidates else 'UNKNOWN',
-            'note':'Set OPENAI_API_KEY to enable image understanding. Nothing is logged until the user confirms.'
+            'confidence':'CAPTION_ONLY' if caption_preview else 'UNKNOWN',
+            'note':'Vision provider is not configured. Caption matches are shown only for review; nothing is auto-saved.'
         })
 
+    review=build_vision_review(db, analysis.get('result'))
     return envelope({
         'status':'REVIEW_REQUIRED',
         'analysis_provider':analysis['provider'],
         'analysis_model':analysis['model'],
+        'image_analyzed':True,
         'meal_type':req.meal_type,
-        'candidates':candidates,
+        **review,
         'vision_result':analysis.get('result'),
         'confidence':'AI_ESTIMATE',
-        'note':'Image nutrition is an AI estimate. Review portions and values before saving.'
     })
 
 
