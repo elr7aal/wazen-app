@@ -66,6 +66,7 @@ def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_
         severe_allergens=p.severe_allergens(), allow_modifications=allow_modifications,
         preferred_terms=p.food_preferences(), disliked_terms=p.disliked_foods(), behavior_scores=behavior_scores(db,user.id),
         preference_levels=pref_ctx['preference_levels'],
+        food_preference_levels=pref_ctx['food_preference_levels'],
         never_show_terms=pref_ctx['never_show_terms'],
         never_show_food_ids=pref_ctx['never_show_food_ids'],
     )
