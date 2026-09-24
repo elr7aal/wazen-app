@@ -58,14 +58,12 @@ def parse_craving_text(text: str) -> dict[str,Any]:
     ],t)
 
     budget_max=_number([
-        r'(?:تحت|اقل من|أقل من|ميزانيتي|budget|under|max)\s*(?:aed|درهم|دراهم)?\s*(\d{1,4}(?:\.\d+)?)\s*(?:aed|درهم|دراهم)?',
+        r'(?:ميزانيتي|الميزانية|الميزانيه|budget)\s*(?:حدها|حده|is|of)?\s*(?:aed|درهم|دراهم)?\s*(\d{1,4}(?:\.\d+)?)',
+        r'(?:تحت|اقل من|أقل من|under|below)\s*(?:aed|درهم|دراهم)\s*(\d{1,4}(?:\.\d+)?)',
+        r'(?:تحت|اقل من|أقل من|under|below)\s*(\d{1,4}(?:\.\d+)?)\s*(?:aed|درهم|دراهم)',
         r'(?:aed|درهم|دراهم)\s*(\d{1,4}(?:\.\d+)?)',
         r'(\d{1,4}(?:\.\d+)?)\s*(?:aed|درهم|دراهم)',
     ],t)
-
-    # Avoid misreading a calorie figure followed by "سعرة" as budget.
-    if budget_max is not None and max_calories is not None and budget_max==max_calories and not re.search(r'aed|درهم|دراهم|ميزاني',t):
-        budget_max=None
 
     min_protein_g=_number([
         r'(?:على الأقل|اقل شي|أقل شي|min(?:imum)?|at least)\s*(\d{1,3}(?:\.\d+)?)\s*(?:g|جرام|غرام)?\s*(?:بروتين|protein)',
