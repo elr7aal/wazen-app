@@ -28,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
   final protein=TextEditingController();
   final carbs=TextEditingController();
   final fat=TextEditingController();
+  final fiber=TextEditingController();
   String goal='MAINTAIN';
   String activity='LIGHT';
   Set<String> allergies={};
@@ -46,7 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
 
   @override void initState(){super.initState();load();}
   @override void dispose(){
-    weight.dispose();targetWeight.dispose();budget.dispose();calories.dispose();protein.dispose();carbs.dispose();fat.dispose();
+    weight.dispose();targetWeight.dispose();budget.dispose();calories.dispose();protein.dispose();carbs.dispose();fat.dispose();fiber.dispose();
     super.dispose();
   }
 
@@ -73,6 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
         protein.text='${p['target_protein_g']??''}';
         carbs.text='${p['target_carbs_g']??''}';
         fat.text='${p['target_fat_g']??''}';
+        fiber.text='${p['target_fiber_g']??30}';
         goal=(p['goal_type']??'MAINTAIN').toString();
         activity=(p['activity_level']??'LIGHT').toString();
         allergies=Set<String>.from((p['severe_allergens'] as List? ?? const []).map((x)=>x.toString()));
@@ -91,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
       await WazenApi.instance.updateProfile({
         'weight_kg':_n(weight),'target_weight_kg':_n(targetWeight),'daily_budget':_n(budget),
         'target_calories':_n(calories),'target_protein_g':_n(protein),
-        'target_carbs_g':_n(carbs),'target_fat_g':_n(fat),
+        'target_carbs_g':_n(carbs),'target_fat_g':_n(fat),'target_fiber_g':_n(fiber),
         'goal_type':goal,'activity_level':activity,
         'severe_allergens':allergies.toList(),'food_preferences':prefs.toList(),'disliked_foods':dislikes.toList(),
       });
@@ -175,6 +177,8 @@ class _ProfileScreenState extends State<ProfileScreen>{
           Row(children:[Expanded(child:_field(calories,'السعرات')),const SizedBox(width:10),Expanded(child:_field(protein,'البروتين g'))]),
           const SizedBox(height:10),
           Row(children:[Expanded(child:_field(carbs,'الكربوهيدرات g')),const SizedBox(width:10),Expanded(child:_field(fat,'الدهون g'))]),
+          const SizedBox(height:10),
+          _field(fiber,'الألياف g'),
           const SizedBox(height:8),
           const Text('تقدر تعدل الأهداف يدويًا. وإذا استخدمت إعادة الحساب، وازن يبني نقطة بداية جديدة من بيانات جسمك ونشاطك.',style:TextStyle(color:Colors.black54,height:1.4)),
         ]),
