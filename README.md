@@ -157,3 +157,30 @@ Unified Add Food flow:
 - `API_BASE_URL` is configurable at build time.
 - CORS support added for hosted PWA.
 - See `docs/IOS_NO_MAC_SETUP_AR.md`.
+
+
+## v16 — Admin & Data Operations
+- Admin food review queue with APPROVE / REJECT / FLAG.
+- Admin audit history for review and import actions.
+- JSON and CSV food import with dry-run mode.
+- Validation for required IDs/names, invalid or negative numeric values, duplicate IDs/barcodes and existing barcode conflicts.
+- Lightweight `admin/index.html` review/import console.
+- Admin endpoints protected by `WAZEN_ADMIN_KEY`.
+- Backend CI established; v16 baseline: 49 passing tests.
+
+## v17 — Weekly Plan + Progress
+- Persisted 7-day meal plan with breakfast, lunch, dinner and snack.
+- Meal allocation uses the user's calorie target and excludes explicit severe allergens before planning.
+- Per-day rebalance and full-week regeneration.
+- Progress summaries for 7 / 30 / 90 days.
+- Goal-day tracking, average calories/protein, restaurant spend from logged catalog items and persisted weight history.
+- New Arabic-first mobile “خطتي” tab with weekly plan and progress views.
+- Bottom navigation expanded to: الرئيسية / يومي / اكتشف / خطتي / حسابي.
+- Backend v17 baseline: **52 passing tests**.
+
+## v18 — First-run Experience
+- First-launch splash, language selection, welcome screen and account-method screen.
+- Arabic / English preference is persisted and updates app locale + text direction.
+- Email sign-in/register UI cleaned for real use; Alpha demo credentials removed.
+- API URL moved behind advanced connection settings.
+- Apple, Google and mobile-number sign-in appear only as clearly unavailable placeholders until a secure provider is connected; they do not simulate authentication.
