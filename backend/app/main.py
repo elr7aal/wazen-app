@@ -16,6 +16,7 @@ from app.models.schemas import (
     RegisterRequest, LoginRequest, ProfileUpdateRequest, FoodLogCreateRequest,
     UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
     RefreshTokenRequest, LogoutRequest, ForgotPasswordRequest, ResetPasswordRequest,
+    PreferenceSettingRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -32,13 +33,14 @@ from app.services.admin_data import list_admin_foods, set_review, parse_import_p
 from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
 from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset
 from app.services.goal_history import add_goal_snapshot, list_goal_history
+from app.services.preferences import set_preference, list_preferences
 
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='0.8.0')
+app = FastAPI(title='WAZEN API', version='0.9.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,7 +58,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.8.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '0.9.0'})
 
 
 # -------- Authentication --------
@@ -261,6 +263,28 @@ def profile_history(
 ):
     items=list_goal_history(db, user.id, limit)
     return envelope({'items':items,'count':len(items)})
+
+
+@app.get('/api/v1/preferences')
+def get_preferences(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items=list_preferences(db,user.id)
+    return envelope({'items':items,'count':len(items)})
+
+
+@app.put('/api/v1/preferences')
+def put_preference(
+    req: PreferenceSettingRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        item=set_preference(db,user.id,req.target_type,req.target_value,req.level)
+    except ValueError:
+        raise HTTPException(status_code=422,detail='Invalid preference')
+    return envelope(item)
 
 
 # -------- Food Log + persisted daily state --------
