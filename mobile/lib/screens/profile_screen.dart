@@ -15,6 +15,7 @@ class ProfileScreen extends StatefulWidget{
 class _ProfileScreenState extends State<ProfileScreen>{
   Map<String,dynamic>? user;
   Map<String,dynamic>? insights;
+  List<Map<String,dynamic>> goalHistory=[];
   bool loading=true,saving=false;
   String? error;
 
@@ -50,12 +51,12 @@ class _ProfileScreenState extends State<ProfileScreen>{
   Future<void> load()async{
     setState(()=>loading=true);
     try{
-      final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights()]);
+      final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights(),WazenApi.instance.goalHistory(limit:8)]);
       final u=Map<String,dynamic>.from(results[0]);
       final p=Map<String,dynamic>.from(u['profile'] as Map);
       if(!mounted)return;
       setState((){
-        user=u; insights=Map<String,dynamic>.from(results[1]);
+        user=u; insights=Map<String,dynamic>.from(results[1]); goalHistory=List<Map<String,dynamic>>.from(results[2] as List);
         weight.text='${p['weight_kg']??''}';
         targetWeight.text='${p['target_weight_kg']??''}';
         budget.text='${p['daily_budget']??''}';
@@ -196,6 +197,8 @@ class _ProfileScreenState extends State<ProfileScreen>{
           )).toList()),
         ]),
         const SizedBox(height:16),
+        _goalHistorySection(),
+        const SizedBox(height:16),
         _why(),
         const SizedBox(height:18),
         FilledButton(onPressed:saving?null:saveProfile,child:Text(saving?'جاري الحفظ...':'حفظ التغييرات')),
@@ -222,6 +225,51 @@ class _ProfileScreenState extends State<ProfileScreen>{
       const SizedBox(height:14),...children,
     ]),
   );
+
+
+  Widget _goalHistorySection(){
+    String goalLabel(String value){
+      switch(value){
+        case 'LOSE':return 'نزول وزن';
+        case 'GAIN':return 'زيادة وزن';
+        default:return 'المحافظة';
+      }
+    }
+    if(goalHistory.isEmpty){
+      return _section('سجل خطتي',[
+        const Text('أول تعديل جوهري على هدفك أو خطتك بيظهر هنا.',style:TextStyle(color:Colors.black54,height:1.4)),
+      ]);
+    }
+    return _section('سجل خطتي',[
+      ...goalHistory.take(6).map((row){
+        final snap=Map<String,dynamic>.from((row['snapshot'] as Map?)??const{});
+        final created=(row['created_at']??'').toString();
+        final date=created.length>=10?created.substring(0,10):created;
+        final reason=(row['reason']??'').toString();
+        return Container(
+          margin:const EdgeInsets.only(bottom:10),
+          padding:const EdgeInsets.all(12),
+          decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE7EAE7))),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Row(children:[
+              Expanded(child:Text(goalLabel((snap['goal_type']??'MAINTAIN').toString()),style:const TextStyle(fontWeight:FontWeight.w900))),
+              Text(date,style:const TextStyle(fontSize:11,color:Colors.black45)),
+            ]),
+            const SizedBox(height:6),
+            Text(
+              'الوزن ${snap['weight_kg']??'—'} kg • الهدف ${snap['target_weight_kg']??'—'} kg • ${snap['target_calories']??'—'} سعرة',
+              style:const TextStyle(fontSize:12,color:Colors.black54,height:1.4),
+            ),
+            const SizedBox(height:4),
+            Text(
+              reason=='ONBOARDING'?'بداية الخطة':reason=='RECALCULATE'?'إعادة حساب الخطة':'تحديث الخطة',
+              style:const TextStyle(fontSize:11,color:WazenTheme.greenDark,fontWeight:FontWeight.w700),
+            ),
+          ]),
+        );
+      }),
+    ]);
+  }
 
   Widget _why(){
     final i=insights;
