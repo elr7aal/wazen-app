@@ -225,11 +225,35 @@ class WazenApi {
 
 
 
-  Future<List<FoodDetail>> searchFoods(String query) async {
-    final uri=Uri.parse('$baseUrl/foods/search').replace(queryParameters:{'q':query,'limit':'25'});
+  Future<List<FoodDetail>> searchFoods(
+    String query, {
+    String? vendor,
+    String? brand,
+    String? category,
+    String? foodType,
+    double? maxCalories,
+    double? minProteinG,
+    double? maxSodiumMg,
+    double? maxPrice,
+    int limit=25,
+  }) async {
+    final params=<String,String>{
+      if(query.trim().isNotEmpty)'q':query.trim(),
+      if(vendor!=null&&vendor.isNotEmpty)'vendor':vendor,
+      if(brand!=null&&brand.isNotEmpty)'brand':brand,
+      if(category!=null&&category.isNotEmpty)'category':category,
+      if(foodType!=null&&foodType.isNotEmpty)'food_type':foodType,
+      if(maxCalories!=null)'max_calories':'$maxCalories',
+      if(minProteinG!=null)'min_protein_g':'$minProteinG',
+      if(maxSodiumMg!=null)'max_sodium_mg':'$maxSodiumMg',
+      if(maxPrice!=null)'max_price':'$maxPrice',
+      'limit':'$limit',
+    };
+    final uri=Uri.parse('$baseUrl/foods/search').replace(queryParameters:params);
     final r=await http.get(uri,headers:_headers);
     final data=Map<String,dynamic>.from(_unwrap(r));
-    return ((data['items'] as List?)??const []).map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
+    return ((data['items'] as List?)??const [])
+      .map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
   }
 
   Future<FoodDetail?> barcodeLookup(String barcode) async {
