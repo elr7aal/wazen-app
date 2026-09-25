@@ -42,6 +42,7 @@ from app.config import validate_runtime_config, safe_runtime_summary
 from app.services.system_health import readiness_status
 from app.services.vision_review import build_vision_review
 from app.services.craving_parser import parse_craving_text
+from app.services.idempotency import begin_idempotent, finish_idempotent, abandon_idempotent
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -49,7 +50,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.8.0')
+app = FastAPI(title='WAZEN API', version='1.9.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,13 +70,33 @@ async def request_id_middleware(request: Request, call_next):
 
 
 
+def _begin_write_idempotency(db: Session, user: User, key: Optional[str], path: str, payload: Any):
+    try:
+        result=begin_idempotent(
+            db,
+            user_id=user.id,
+            method='POST',
+            path=path,
+            key=key,
+            payload=payload,
+        )
+    except ValueError as exc:
+        code=str(exc)
+        if code=='INVALID_IDEMPOTENCY_KEY':
+            raise HTTPException(status_code=422,detail='Invalid Idempotency-Key')
+        if code=='IDEMPOTENCY_PAYLOAD_CONFLICT':
+            raise HTTPException(status_code=409,detail='Idempotency-Key was already used with a different request')
+        raise HTTPException(status_code=409,detail='A request with this Idempotency-Key is already in progress')
+    return result
+
+
 def envelope(data=None, error=None, meta=None):
     return {'success': error is None, 'data': data, 'error': error, 'meta': meta or {}}
 
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.8.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.9.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -347,10 +368,24 @@ def put_health_limit(
 
 # -------- Food Log + persisted daily state --------
 @app.post('/api/v1/food-log')
-def add_food_log(req: FoodLogCreateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    row = FoodLog(user_id=user.id, **req.model_dump())
-    db.add(row); db.commit(); db.refresh(row)
-    return envelope({'log_id': row.id, 'daily_totals': today_totals(db, user.id), 'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump()})
+def add_food_log(
+    req: FoodLogCreateRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/food-log',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        row = FoodLog(user_id=user.id, **req.model_dump())
+        db.add(row); db.commit(); db.refresh(row)
+        response=envelope({'log_id': row.id, 'daily_totals': today_totals(db, user.id), 'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump()})
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 @app.get('/api/v1/food-log/today')
@@ -731,7 +766,15 @@ def rebalance(req: RebalanceRequest): return envelope(rebalance_day(req))
 
 
 @app.post('/api/v1/food-log/from-catalog')
-def add_food_log_from_catalog(req: CatalogFoodLogRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def add_food_log_from_catalog(
+    req: CatalogFoodLogRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/food-log/from-catalog',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
     food = db.get(FoodItem, req.food_id)
     if not food:
         raise HTTPException(status_code=404, detail='Food item not found')
@@ -739,7 +782,7 @@ def add_food_log_from_catalog(req: CatalogFoodLogRequest, user: User = Depends(g
         raise HTTPException(status_code=422, detail='Food nutrition unavailable')
     row = log_catalog_food(db, user, food, req.meal_type, req.quantity, req.entry_method)
     state = calculate_daily_state(build_daily_request(db, user)).model_dump()
-    return envelope({
+    response=envelope({
         'log': {
             'id': row.id, 'food_id': row.food_id, 'food_name': row.food_name,
             'meal_type': row.meal_type, 'quantity': req.quantity, 'calories': row.calories,
@@ -748,6 +791,8 @@ def add_food_log_from_catalog(req: CatalogFoodLogRequest, user: User = Depends(g
         'daily_totals': today_totals(db, user.id),
         'daily_state': state,
     })
+    finish_idempotent(db,idem.get('record'),response)
+    return response
 
 
 @app.post('/api/v1/golden-flow')
