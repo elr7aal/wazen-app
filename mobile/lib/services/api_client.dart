@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/api_models.dart';
 
 class ApiException implements Exception {
@@ -19,14 +20,39 @@ class WazenApi {
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8000/api/v1',
   );
+  static const FlutterSecureStorage _secureStorage=FlutterSecureStorage();
+  static const String _accessTokenKey='wazen_access_token';
+  static const String _refreshTokenKey='wazen_refresh_token';
+
   String? token;
   String? refreshToken;
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
     baseUrl = prefs.getString('api_base_url') ?? baseUrl;
-    token = prefs.getString('access_token');
-    refreshToken = prefs.getString('refresh_token');
+
+    try{
+      token=await _secureStorage.read(key:_accessTokenKey);
+      refreshToken=await _secureStorage.read(key:_refreshTokenKey);
+
+      // One-time migration from the pre-v42 SharedPreferences session.
+      final legacyAccess=prefs.getString('access_token');
+      final legacyRefresh=prefs.getString('refresh_token');
+      if(token==null&&legacyAccess!=null){
+        token=legacyAccess;
+        await _secureStorage.write(key:_accessTokenKey,value:legacyAccess);
+      }
+      if(refreshToken==null&&legacyRefresh!=null){
+        refreshToken=legacyRefresh;
+        await _secureStorage.write(key:_refreshTokenKey,value:legacyRefresh);
+      }
+      if(legacyAccess!=null)await prefs.remove('access_token');
+      if(legacyRefresh!=null)await prefs.remove('refresh_token');
+    }catch(_){
+      // Never fall back to persisting authentication tokens in plain preferences.
+      token=null;
+      refreshToken=null;
+    }
   }
 
   Future<void> configureBaseUrl(String value) async {
@@ -67,11 +93,14 @@ class WazenApi {
   }
 
   Future<void> _saveSession(Map<String,dynamic> data) async {
-    token = data['access_token']?.toString();
-    refreshToken = data['refresh_token']?.toString();
-    final prefs = await SharedPreferences.getInstance();
-    if(token!=null)await prefs.setString('access_token',token!);
-    if(refreshToken!=null)await prefs.setString('refresh_token',refreshToken!);
+    token=data['access_token']?.toString();
+    refreshToken=data['refresh_token']?.toString();
+    if(token!=null)await _secureStorage.write(key:_accessTokenKey,value:token!);
+    if(refreshToken!=null)await _secureStorage.write(key:_refreshTokenKey,value:refreshToken!);
+
+    final prefs=await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
   }
 
   Future<bool> refreshSession() async {
@@ -95,6 +124,10 @@ class WazenApi {
   Future<void> clearSession() async {
     token=null;
     refreshToken=null;
+    await _secureStorage.delete(key:_accessTokenKey);
+    await _secureStorage.delete(key:_refreshTokenKey);
+
+    // Clean up any pre-v42 values as a defense-in-depth migration step.
     final prefs=await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
