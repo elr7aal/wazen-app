@@ -36,6 +36,7 @@ from app.services.goal_history import add_goal_snapshot, list_goal_history
 from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
 from app.services.natural_language import parse_natural_food_text
+from app.services.recommendation_audit import list_exclusions
 from app.services.vision_review import build_vision_review
 from app.services.craving_parser import parse_craving_text
 
@@ -640,9 +641,28 @@ def recommendations(req: RecommendationRequest, db: Session = Depends(get_db)):
 # -------- Persisted recommendation endpoint --------
 @app.post('/api/v1/recommendations/for-me')
 def recommendations_for_me(req: UserRecommendationRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return envelope(recommend_for_user(db,user,req.vendor,req.category,req.max_calories,req.budget_max,req.allow_modifications))
+    return envelope(recommend_for_user(
+        db,
+        user,
+        vendor=req.vendor,
+        category=req.category,
+        max_calories=req.max_calories,
+        budget_max=req.budget_max,
+        allow_modifications=req.allow_modifications,
+    ))
 
 
+
+
+@app.get('/api/v1/recommendations/exclusions')
+def recommendation_exclusions(
+    reason: Optional[str] = None,
+    limit: int = 100,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items=list_exclusions(db,user.id,limit=limit,reason=reason)
+    return envelope({'items':items,'count':len(items)})
 
 
 @app.post('/api/v1/recommendations/feedback')
