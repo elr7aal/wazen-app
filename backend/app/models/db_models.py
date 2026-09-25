@@ -352,3 +352,16 @@ class AuthRateLimit(Base):
     window_started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     blocked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+
+class SecurityEvent(Base):
+    __tablename__ = 'security_events'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    event_type: Mapped[str] = mapped_column(String(50), index=True)
+    outcome: Mapped[str] = mapped_column(String(24), index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey('users.id'), nullable=True, index=True)
+    subject_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    client_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    details_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
