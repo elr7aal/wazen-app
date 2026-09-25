@@ -37,9 +37,11 @@ from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
 from app.services.natural_language import parse_natural_food_text
 from app.services.recommendation_audit import list_exclusions, list_decisions
+from app.config import validate_runtime_config, safe_runtime_summary
 from app.services.vision_review import build_vision_review
 from app.services.craving_parser import parse_craving_text
 
+_runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
 
 with SessionLocal() as _seed_db:
@@ -49,7 +51,7 @@ app = FastAPI(title='WAZEN API', version='1.8.0')
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[x.strip() for x in os.getenv('WAZEN_CORS_ORIGINS', '*').split(',') if x.strip()],
+    allow_origins=list(_runtime_config.cors_origins),
     allow_credentials=False,
     allow_methods=['*'],
     allow_headers=['*'],
@@ -63,7 +65,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.8.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.8.0', **safe_runtime_summary(_runtime_config)})
 
 
 # -------- Authentication --------
