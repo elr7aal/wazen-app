@@ -50,7 +50,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.9.0')
+app = FastAPI(title='WAZEN API', version='2.0.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,7 +96,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.9.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.0.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -599,24 +599,34 @@ def log_favorite_meal(
 @app.post('/api/v1/activity-log')
 def add_activity_log(
     req: ActivityLogCreateRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    row=ActivityLog(
-        user_id=user.id,
-        calories_credit=req.calories_credit,
-        source=req.source,
-        note=req.note,
-    )
-    db.add(row);db.commit();db.refresh(row)
-    return envelope({
-        'item':{
-            'id':row.id,'calories_credit':row.calories_credit,'source':row.source,
-            'note':row.note,'logged_at':row.logged_at.isoformat(),
-        },
-        'activity_credit':today_activity_credit(db,user.id),
-        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
-    })
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/activity-log',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        row=ActivityLog(
+            user_id=user.id,
+            calories_credit=req.calories_credit,
+            source=req.source,
+            note=req.note,
+        )
+        db.add(row);db.commit();db.refresh(row)
+        response=envelope({
+            'item':{
+                'id':row.id,'calories_credit':row.calories_credit,'source':row.source,
+                'note':row.note,'logged_at':row.logged_at.isoformat(),
+            },
+            'activity_credit':today_activity_credit(db,user.id),
+            'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+        })
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 @app.get('/api/v1/activity-log/today')
@@ -822,39 +832,55 @@ def add_food_log_from_catalog(
 
 
 @app.post('/api/v1/golden-flow')
-def golden_flow(req: GoldenFlowRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def golden_flow(
+    req: GoldenFlowRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     parsed=parse_craving_text(req.craving_text)
-
-    logged = None
     if req.auto_log_food_id:
         food = db.get(FoodItem, req.auto_log_food_id)
         if not food:
             raise HTTPException(status_code=404, detail='Food item not found')
-        logged_row = log_catalog_food(db, user, food, req.meal_type, req.quantity, 'RECOMMENDATION')
-        logged = {
-            'log_id': logged_row.id,
-            'food_id': logged_row.food_id,
-            'food_name': logged_row.food_name,
-            'calories': logged_row.calories,
-        }
 
-    recommendations = recommend_for_user(
-        db, user,
-        vendor=parsed['restaurant'],
-        category=parsed['food_category'],
-        max_calories=parsed['max_calories'],
-        min_protein_g=parsed['min_protein_g'],
-        budget_max=parsed['budget_max'],
-        allow_modifications=req.allow_modifications,
-    )
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/golden-flow',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
 
-    return envelope({
-        'parsed_intent': parsed,
-        'logged': logged,
-        'daily_totals': today_totals(db, user.id),
-        'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump(),
-        'recommendations': recommendations,
-    })
+    try:
+        logged = None
+        if req.auto_log_food_id:
+            logged_row = log_catalog_food(db, user, food, req.meal_type, req.quantity, 'RECOMMENDATION')
+            logged = {
+                'log_id': logged_row.id,
+                'food_id': logged_row.food_id,
+                'food_name': logged_row.food_name,
+                'calories': logged_row.calories,
+            }
+
+        recommendations = recommend_for_user(
+            db, user,
+            vendor=parsed['restaurant'],
+            category=parsed['food_category'],
+            max_calories=parsed['max_calories'],
+            min_protein_g=parsed['min_protein_g'],
+            budget_max=parsed['budget_max'],
+            allow_modifications=req.allow_modifications,
+        )
+
+        response=envelope({
+            'parsed_intent': parsed,
+            'logged': logged,
+            'daily_totals': today_totals(db, user.id),
+            'daily_state': calculate_daily_state(build_daily_request(db, user)).model_dump(),
+            'recommendations': recommendations,
+        })
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 MAKE_IT_FIT_COMPONENTS = [
