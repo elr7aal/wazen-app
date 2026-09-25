@@ -34,6 +34,8 @@ def test_alembic_baseline_creates_current_schema_and_is_idempotent(tmp_path):
     inspector=sa.inspect(engine)
     tables=set(inspector.get_table_names())
 
+    assert 'email_verified' in users_cols
+    assert 'email_verified_at' in users_cols
     assert 'users' in tables
     assert 'user_profiles' in tables
     assert 'food_items' in tables
@@ -45,6 +47,7 @@ def test_alembic_baseline_creates_current_schema_and_is_idempotent(tmp_path):
     assert 'auth_rate_limits' in tables
     assert 'security_events' in tables
     assert 'operational_events' in tables
+    assert 'email_verification_tokens' in tables
 
     profile_cols={x['name'] for x in inspector.get_columns('user_profiles')}
     log_cols={x['name'] for x in inspector.get_columns('food_logs')}
