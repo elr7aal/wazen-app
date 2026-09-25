@@ -276,6 +276,8 @@ def delete_me(
 ):
     if not verify_password(req.password,user.password_hash):
         raise HTTPException(status_code=401,detail='Invalid password')
+    clear_subject(db,'LOGIN_EMAIL',user.email)
+    clear_subject(db,'RESET_EMAIL',user.email)
     counts=delete_user_data(db,user.id)
     return envelope({
         'deleted':True,
