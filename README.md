@@ -382,3 +382,13 @@ Unified Add Food flow:
 - Mobile Account → Privacy & Data screen supports copying a JSON export and a guarded permanent-delete flow.
 - Backend v52 baseline: **142 passing tests**.
 - Flutter validation and web build: **passing**.
+
+
+## v53 — Data Quality & Freshness
+- Food sources are classified as FRESH, AGING, STALE or UNKNOWN from the last verification date.
+- Food detail and recommendation payloads expose source freshness and source age in days.
+- Recommendation cards and food detail surface stale/unknown verification warnings to the user.
+- Admin Data Quality report identifies stale/undated/missing sources and missing core nutrition/sodium.
+- Admin UI includes a live data-quality dashboard.
+- Backend v53 baseline: **146 passing tests**.
+- Flutter validation and web build: **passing**.
