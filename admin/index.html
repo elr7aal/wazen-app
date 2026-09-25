@@ -64,6 +64,15 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 
 
 
+
+<section class="card">
+  <div class="row"><h2 class="grow">Production Launch Gate</h2><button onclick="loadLaunchGate()">فحص الجاهزية</button></div>
+  <div id="launchStatus" class="row muted">لم يتم تشغيل فحص الإطلاق بعد.</div>
+  <div id="launchBlockers" style="margin-top:10px"></div>
+  <div id="launchWarnings" style="margin-top:10px"></div>
+  <div id="launchManual" style="margin-top:10px"></div>
+</section>
+
 <section class="card">
   <div class="row"><h2 class="grow">Integrations</h2><button onclick="loadIntegrations()">تحديث</button></div>
   <div id="integrationStatus" class="row muted">لم يتم تحميل حالة التكاملات بعد.</div>
@@ -190,6 +199,36 @@ async function loadQuality(){
 
 
 
+
+
+async function loadLaunchGate(){
+  try{
+    const d=await api('/admin/launch-readiness');
+    $('launchStatus').innerHTML=[
+      'الحالة: '+(d.status||'—'),
+      'Blockers: '+(d.blocker_count??0),
+      'Warnings: '+(d.warning_count??0),
+      'Environment: '+((d.runtime&&d.runtime.environment)||'—'),
+      'Database: '+((d.runtime&&d.runtime.database_backend)||'—'),
+      'CORS: '+((d.runtime&&d.runtime.cors_mode)||'—')
+    ].map(x=>'<span class="badge">'+x+'</span>').join(' ');
+
+    $('launchBlockers').innerHTML=(d.blockers||[]).map(x=>
+      '<div class="badge">BLOCKER • '+x.code+' • '+x.message+'</div>'
+    ).join(' ')||'<span class="badge">لا توجد Blockers برمجية حالية.</span>';
+
+    $('launchWarnings').innerHTML=(d.warnings||[]).map(x=>
+      '<div class="badge">WARNING • '+x.code+' • '+x.message+'</div>'
+    ).join(' ')||'<span class="badge">لا توجد Warnings.</span>';
+
+    $('launchManual').innerHTML='<div class="muted" style="margin-bottom:6px">Manual checks قبل الإطلاق:</div>'+
+      ((d.manual_checks||[]).map(x=>
+        '<div class="badge">'+x.code+' • '+x.message+'</div>'
+      ).join(' ')||'<span class="badge">لا توجد Manual checks.</span>');
+  }catch(e){
+    $('launchStatus').textContent=e.message;
+  }
+}
 
 async function loadIntegrations(){
   try{
