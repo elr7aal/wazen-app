@@ -17,7 +17,7 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 </style>
 </head>
 <body>
-<header><h1 style="margin:0">WAZEN Admin</h1><div>مراجعة البيانات، الاستيراد، التعديل والدمج — v35</div></header>
+<header><h1 style="margin:0">WAZEN Admin</h1><div>مراجعة البيانات، الجودة، الاستيراد، التعديل والدمج — v53</div></header>
 <main>
 <section class="card">
   <div class="row">
@@ -36,6 +36,18 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
     <button onclick="loadFoods()">بحث</button>
   </div>
   <div style="overflow:auto;margin-top:12px"><table><thead><tr><th>الطعام</th><th>المصدر</th><th>التغذية</th><th>المراجعة</th><th>إجراء</th></tr></thead><tbody id="foods"></tbody></table></div>
+</section>
+
+
+<section class="card">
+  <div class="row"><h2 class="grow">جودة وحداثة البيانات</h2><button onclick="loadQuality()">تحديث التقرير</button></div>
+  <div id="qualitySummary" class="row muted">لم يتم تحميل التقرير بعد.</div>
+  <div style="overflow:auto;margin-top:12px">
+    <table>
+      <thead><tr><th>الطعام</th><th>المصدر</th><th>الحداثة</th><th>المشاكل</th></tr></thead>
+      <tbody id="qualityIssues"></tbody>
+    </table>
+  </div>
 </section>
 
 <section class="card">
@@ -96,6 +108,33 @@ async function mergeFood(sourceId){
 }
 function sample(){if($('format').value==='JSON')$('payload').value=JSON.stringify([{id:'LOCAL-001',name_ar:'مجبوس دجاج',name_en:'Chicken Machboos',food_type:'LOCAL',category:'RICE',calories:520,protein_g:32,carbs_g:61,fat_g:16,sodium_mg:780}],null,2);else $('payload').value='id,name_en,name_ar,food_type,calories,protein_g\nLOCAL-001,Chicken Machboos,مجبوس دجاج,LOCAL,520,32\n'}
 async function runImport(){try{const format=$('format').value;const body={format,dry_run:$('dry').checked};if(format==='JSON')body.records=JSON.parse($('payload').value||'[]');else body.csv_text=$('payload').value;const d=await api('/admin/import/foods',{method:'POST',body:JSON.stringify(body)});$('importResult').textContent=JSON.stringify(d,null,2)}catch(e){$('importResult').textContent=e.message}}
+
+async function loadQuality(){
+  try{
+    const d=await api('/admin/data-quality?limit=200');
+    const s=d.summary||{};
+    $('qualitySummary').innerHTML=[
+      'إجمالي: '+(s.active_foods??0),
+      'Fresh: '+(s.fresh??0),
+      'Aging: '+(s.aging??0),
+      'Stale: '+(s.stale??0),
+      'بدون تحقق: '+(s.unknown_verification??0),
+      'بدون مصدر: '+(s.missing_source??0),
+      'نقص تغذية أساسية: '+(s.missing_core_nutrition??0),
+      'نقص صوديوم: '+(s.missing_sodium??0),
+      'إجمالي السجلات ذات المشاكل: '+(d.issue_count??0)
+    ].map(x=>'<span class="badge">'+x+'</span>').join(' ');
+    $('qualityIssues').innerHTML=(d.issues||[]).map(x=>`<tr>
+      <td><b>${x.name||x.food_id}</b><div class="muted">${x.food_id}</div></td>
+      <td>${x.source_name||'—'}<div class="muted">${x.source_confidence||'—'}</div></td>
+      <td><span class="badge">${x.source_freshness||'UNKNOWN'}</span><div class="muted">${x.source_age_days==null?'—':x.source_age_days+' يوم'}</div></td>
+      <td>${(x.flags||[]).map(f=>'<span class="badge">'+f+'</span>').join(' ')}</td>
+    </tr>`).join('')||'<tr><td colspan="4">لا توجد مشاكل ضمن النتائج المعروضة</td></tr>';
+  }catch(e){
+    $('qualitySummary').textContent=e.message;
+  }
+}
+
 async function loadAudit(){try{$('audit').textContent=JSON.stringify(await api('/admin/audit?limit=100'),null,2)}catch(e){$('audit').textContent=e.message}}
 restore();
 </script>
