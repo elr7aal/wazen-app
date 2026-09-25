@@ -43,6 +43,7 @@ def test_alembic_baseline_creates_current_schema_and_is_idempotent(tmp_path):
     assert 'recommendation_decision_logs' in tables
     assert 'idempotency_records' in tables
     assert 'auth_rate_limits' in tables
+    assert 'security_events' in tables
 
     profile_cols={x['name'] for x in inspector.get_columns('user_profiles')}
     log_cols={x['name'] for x in inspector.get_columns('food_logs')}
