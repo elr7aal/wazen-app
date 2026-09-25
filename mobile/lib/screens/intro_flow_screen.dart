@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/app_preferences.dart';
+import '../services/api_client.dart';
 import 'auth_screen.dart';
 
 class IntroFlowScreen extends StatefulWidget {
@@ -13,15 +14,43 @@ class IntroFlowScreen extends StatefulWidget {
 class _IntroFlowScreenState extends State<IntroFlowScreen> {
   int step=0;
   Timer? timer;
+  Map<String,dynamic>? capabilitiesData;
+  bool capabilitiesLoading=true;
 
   bool get arabic=>AppPreferences.instance.language.value=='ar';
 
   @override
   void initState(){
     super.initState();
+    _loadCapabilities();
     timer=Timer(const Duration(milliseconds:1200),(){
       if(mounted&&step==0)setState(()=>step=1);
     });
+  }
+
+  Future<void> _loadCapabilities() async {
+    try{
+      final data=await WazenApi.instance.capabilities();
+      if(mounted)setState(()=>capabilitiesData=data);
+    }catch(_){
+      // Safe fallback: email/password remains available; external providers stay disabled.
+    }finally{
+      if(mounted)setState(()=>capabilitiesLoading=false);
+    }
+  }
+
+  bool _authAvailable(String key){
+    if(key=='email_password')return true;
+    final auth=capabilitiesData?['auth'];
+    if(auth is! Map)return false;
+    final provider=auth[key];
+    if(provider is! Map)return false;
+    return provider['available']==true;
+  }
+
+  String _providerLabel(String label,String key){
+    if(_authAvailable(key))return label;
+    return arabic?'$label • قريبًا':'$label • Coming soon';
   }
 
   @override
@@ -170,13 +199,34 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
         const SizedBox(height:8),
         Text(arabic?'اختر الطريقة المناسبة لك.':'Choose the method that works for you.',style:const TextStyle(color:Colors.black54)),
         const SizedBox(height:28),
-        _provider(Icons.apple,'Apple',()=>unavailable('Apple Sign in')),
+        if(capabilitiesLoading)
+          const Padding(
+            padding:EdgeInsets.only(bottom:12),
+            child:LinearProgressIndicator(minHeight:2),
+          ),
+        _provider(
+          Icons.apple,
+          _providerLabel('Apple','apple'),
+          _authAvailable('apple')?()=>unavailable('Apple Sign in'):null,
+        ),
         const SizedBox(height:10),
-        _provider(Icons.g_mobiledata_rounded,'Google',()=>unavailable('Google Sign in')),
+        _provider(
+          Icons.g_mobiledata_rounded,
+          _providerLabel('Google','google'),
+          _authAvailable('google')?()=>unavailable('Google Sign in'):null,
+        ),
         const SizedBox(height:10),
-        _provider(Icons.email_outlined,arabic?'البريد الإلكتروني':'Email',finishToEmail),
+        _provider(
+          Icons.email_outlined,
+          arabic?'البريد الإلكتروني':'Email',
+          finishToEmail,
+        ),
         const SizedBox(height:10),
-        _provider(Icons.phone_iphone_rounded,arabic?'رقم الجوال':'Mobile number',()=>unavailable('Mobile Sign in')),
+        _provider(
+          Icons.phone_iphone_rounded,
+          _providerLabel(arabic?'رقم الجوال':'Mobile number','mobile_otp'),
+          _authAvailable('mobile_otp')?()=>unavailable('Mobile Sign in'):null,
+        ),
         const SizedBox(height:24),
         Text(
           arabic?'بالاستمرار، فإنك توافق على الشروط وسياسة الخصوصية.':'By continuing, you agree to the Terms and Privacy Policy.',
@@ -187,7 +237,7 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
     )),
   );
 
-  Widget _provider(IconData icon,String label,VoidCallback onTap)=>OutlinedButton.icon(
+  Widget _provider(IconData icon,String label,VoidCallback? onTap)=>OutlinedButton.icon(
     onPressed:onTap,
     icon:Icon(icon),
     label:Padding(
