@@ -17,7 +17,7 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 </style>
 </head>
 <body>
-<header><h1 style="margin:0">WAZEN Admin</h1><div>مراجعة بيانات الطعام والاستيراد — Alpha v16</div></header>
+<header><h1 style="margin:0">WAZEN Admin</h1><div>مراجعة البيانات، الاستيراد، التعديل والدمج — v35</div></header>
 <main>
 <section class="card">
   <div class="row">
@@ -61,9 +61,39 @@ function restore(){ $('api').value=localStorage.getItem('wazen_api')||$('api').v
 function headers(){return {'Content-Type':'application/json','X-WAZEN-ADMIN-KEY':$('key').value,'X-WAZEN-ADMIN-ACTOR':$('actor').value}}
 async function api(path,opt={}){saveSettings();const r=await fetch($('api').value.replace(/\/$/,'')+path,{...opt,headers:{...headers(),...(opt.headers||{})}});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||('HTTP '+r.status));return j.data}
 async function loadFoods(){
- try{const p=new URLSearchParams();if($('q').value)p.set('q',$('q').value);if($('status').value)p.set('review_status',$('status').value);const d=await api('/admin/foods?'+p);$('foods').innerHTML=d.items.map(x=>`<tr><td><b>${x.name_ar||x.name_en||x.id}</b><div class="muted">${x.id}</div></td><td>${x.vendor_name||x.brand_name||'-'}</td><td>${x.nutrition.calories??'-'} kcal<br>${x.nutrition.protein_g??'-'}g protein</td><td><span class="badge">${x.review.review_status}</span><div class="muted">${x.review.note||''}</div></td><td><button onclick="review('${x.id}','APPROVE')">اعتماد</button> <button class="secondary" onclick="review('${x.id}','FLAG')">Flag</button> <button class="secondary" onclick="review('${x.id}','REJECT')">رفض</button></td></tr>`).join('')||'<tr><td colspan="5">لا توجد نتائج</td></tr>'}catch(e){alert(e.message)}
+ try{const p=new URLSearchParams();if($('q').value)p.set('q',$('q').value);if($('status').value)p.set('review_status',$('status').value);const d=await api('/admin/foods?'+p);$('foods').innerHTML=d.items.map(x=>`<tr><td><b>${x.name_ar||x.name_en||x.id}</b><div class="muted">${x.id}</div></td><td>${x.vendor_name||x.brand_name||'-'}</td><td>${x.nutrition.calories??'-'} kcal<br>${x.nutrition.protein_g??'-'}g protein</td><td><span class="badge">${x.review.review_status}</span><div class="muted">${x.review.note||''}</div></td><td><button onclick="review('${x.id}','APPROVE')">اعتماد</button> <button class="secondary" onclick="review('${x.id}','FLAG')">Flag</button> <button class="secondary" onclick="review('${x.id}','REJECT')">رفض</button> <button class="secondary" onclick="editFood('${x.id}')">تعديل</button> <button class="secondary" onclick="mergeFood('${x.id}')">دمج</button></td></tr>`).join('')||'<tr><td colspan="5">لا توجد نتائج</td></tr>'}catch(e){alert(e.message)}
 }
 async function review(id,action){const note=prompt('ملاحظة المراجع (اختياري)')||null;try{await api('/admin/foods/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify({action,note})});loadFoods()}catch(e){alert(e.message)}}
+async function editFood(id){
+  try{
+    const rows=await api('/admin/foods?q='+encodeURIComponent(id));
+    const item=(rows.items||[]).find(x=>x.id===id);
+    if(!item){alert('تعذر العثور على السجل');return;}
+    const payload={
+      name_en:item.name_en,
+      name_ar:item.name_ar,
+      vendor_name:item.vendor_name,
+      brand_name:item.brand_name,
+      category:item.category,
+      barcode:item.barcode,
+      nutrition:item.nutrition
+    };
+    const raw=prompt('عدّل JSON ثم اضغط OK',JSON.stringify(payload,null,2));
+    if(!raw)return;
+    const changes=JSON.parse(raw);
+    await api('/admin/foods/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({changes})});
+    await loadFoods();await loadAudit();
+  }catch(e){alert(e.message)}
+}
+async function mergeFood(sourceId){
+  const targetId=prompt('أدخل ID السجل الأساسي الذي تريد الدمج إليه');
+  if(!targetId||targetId===sourceId)return;
+  if(!confirm('سيتم نقل المراجع من '+sourceId+' إلى '+targetId+' وسيصبح المصدر MERGED. متابعة؟'))return;
+  try{
+    await api('/admin/foods/merge',{method:'POST',body:JSON.stringify({source_id:sourceId,target_id:targetId})});
+    await loadFoods();await loadAudit();
+  }catch(e){alert(e.message)}
+}
 function sample(){if($('format').value==='JSON')$('payload').value=JSON.stringify([{id:'LOCAL-001',name_ar:'مجبوس دجاج',name_en:'Chicken Machboos',food_type:'LOCAL',category:'RICE',calories:520,protein_g:32,carbs_g:61,fat_g:16,sodium_mg:780}],null,2);else $('payload').value='id,name_en,name_ar,food_type,calories,protein_g\nLOCAL-001,Chicken Machboos,مجبوس دجاج,LOCAL,520,32\n'}
 async function runImport(){try{const format=$('format').value;const body={format,dry_run:$('dry').checked};if(format==='JSON')body.records=JSON.parse($('payload').value||'[]');else body.csv_text=$('payload').value;const d=await api('/admin/import/foods',{method:'POST',body:JSON.stringify(body)});$('importResult').textContent=JSON.stringify(d,null,2)}catch(e){$('importResult').textContent=e.message}}
 async function loadAudit(){try{$('audit').textContent=JSON.stringify(await api('/admin/audit?limit=100'),null,2)}catch(e){$('audit').textContent=e.message}}
