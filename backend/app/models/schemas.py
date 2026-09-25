@@ -101,6 +101,7 @@ class ProfileUpdateRequest(BaseModel):
     target_fiber_g: Optional[float] = Field(default=None, ge=0)
     sodium_max_mg: Optional[float] = Field(default=None, ge=0)
     severe_allergens: Optional[List[str]] = None
+    condition_context: Optional[List[str]] = None
     food_preferences: Optional[List[str]] = None
     disliked_foods: Optional[List[str]] = None
 
@@ -185,6 +186,7 @@ class OnboardingCompleteRequest(BaseModel):
     activity_level: Literal['SEDENTARY','LIGHT','MODERATE','ACTIVE','VERY_ACTIVE']
     daily_budget: Optional[float] = Field(default=None, ge=0)
     severe_allergens: List[str] = []
+    condition_context: List[str] = []
     food_preferences: List[str] = []
     disliked_foods: List[str] = []
 
