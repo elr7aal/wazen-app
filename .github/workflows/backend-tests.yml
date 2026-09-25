@@ -51,8 +51,8 @@ jobs:
       - name: Wait for migrated API health
         run: |
           for i in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8000/api/v1/health > /tmp/wazen-health.json; then
-              cat /tmp/wazen-health.json
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/readiness > /tmp/wazen-readiness.json; then
+              cat /tmp/wazen-readiness.json
               exit 0
             fi
             sleep 2
