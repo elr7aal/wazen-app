@@ -4,7 +4,7 @@ Updated: 2026-09-25
 
 ## Automated quality gate
 
-- Backend: **122 / 122 tests passing**
+- Backend: **164 / 164 tests passing**
 - Flutter model tests: passing
 - Flutter web validation build: passing
 - Migration-first Docker readiness smoke test: passing
@@ -90,5 +90,11 @@ These do not block local Alpha application logic, but they are not considered pr
 - v45: registration UI aligned with password policy.
 - v46: Docker starts only after successful database migration.
 - v47: readiness endpoint, request IDs and migrated-container smoke testing.
+- v48–v51: idempotent mutation safety, retry resilience and stale-claim recovery.
+- v52: privacy export and permanent account deletion.
+- v53–v54: data freshness and source-aware ranking.
+- v55: database-backed authentication abuse protection.
+- v56: privacy-preserving security event audit.
+- v57: production observability for 5xx/slow requests plus operations alert summary.
 
-Current verified engineering baseline: **122 backend tests passing**, Flutter validation passing, Docker readiness smoke passing.
+Current verified engineering baseline: **164 backend tests passing**, Flutter validation passing, Docker migration/readiness smoke passing.
