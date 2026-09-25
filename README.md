@@ -424,3 +424,14 @@ Unified Add Food flow:
 - Permanent account deletion removes both user-linked security events and hashed email-subject events.
 - Added Alembic revision `0004_security_events` and migration-head coverage.
 - Backend v56 baseline: **159 passing tests**.
+
+
+## v57 — Production Observability
+- Operational event ledger records only HTTP 5xx and slow requests; request bodies, authorization headers and user payloads are never stored.
+- Request tracing links operational events to bounded X-Request-ID values.
+- Admin Operations summary combines readiness, recent 5xx, slow requests, security blocks, active auth throttles and idempotency health.
+- Alert states surface readiness failures, 5xx spikes, slow-request spikes, excessive auth blocks and stale idempotency claims.
+- Admin console includes an Operations dashboard plus recent operational events.
+- Operational events have configurable retention and a dedicated Alembic revision `0005_operational_events`.
+- Backend v57 baseline: **164 passing tests**.
+- Docker migration/readiness smoke: **passing**.
