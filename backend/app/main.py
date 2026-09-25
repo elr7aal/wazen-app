@@ -46,6 +46,7 @@ from app.services.craving_parser import parse_craving_text
 from app.services.idempotency import begin_idempotent, finish_idempotent, abandon_idempotent
 from app.services.privacy import export_user_data, delete_user_data
 from app.services.source_quality import catalog_quality_report
+from app.services.auth_rate_limit import check_allowed, record_failure, clear_subject, cleanup_rate_limits, login_rate_keys, reset_rate_keys
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -53,7 +54,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.4.0')
+app = FastAPI(title='WAZEN API', version='2.5.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,7 +100,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.4.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.5.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -127,10 +128,36 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @app.post('/api/v1/auth/login')
-def login(req: LoginRequest, db: Session = Depends(get_db)):
-    u = db.scalar(select(User).where(User.email == req.email.strip().lower()))
+def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    email=req.email.strip().lower()
+    client_host=request.client.host if request.client else None
+    cleanup_rate_limits(db)
+    rate_keys=login_rate_keys(email,client_host)
+    for scope,subject,_limit in rate_keys:
+        decision=check_allowed(db,scope,subject)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail='Too many authentication attempts. Try again later.',
+                headers={'Retry-After':str(decision.retry_after)},
+            )
+
+    u = db.scalar(select(User).where(User.email == email))
     if not u or not verify_password(req.password, u.password_hash):
+        blocked=None
+        for scope,subject,limit in rate_keys:
+            decision=record_failure(db,scope=scope,subject=subject,limit=limit)
+            if not decision.allowed:
+                blocked=decision
+        if blocked:
+            raise HTTPException(
+                status_code=429,
+                detail='Too many authentication attempts. Try again later.',
+                headers={'Retry-After':str(blocked.retry_after)},
+            )
         raise HTTPException(status_code=401, detail='Invalid credentials')
+
+    clear_subject(db,'LOGIN_EMAIL',email)
     return envelope({'user_id': u.id, **issue_session(db, u.id)})
 
 
@@ -165,8 +192,31 @@ def active_auth_sessions(
 
 
 @app.post('/api/v1/auth/forgot-password')
-def forgot_password(req: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
     email = req.email.strip().lower()
+    client_host=request.client.host if request.client else None
+    cleanup_rate_limits(db)
+    rate_keys=reset_rate_keys(email,client_host)
+    for scope,subject,_limit in rate_keys:
+        decision=check_allowed(db,scope,subject)
+        if not decision.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail='Too many password recovery requests. Try again later.',
+                headers={'Retry-After':str(decision.retry_after)},
+            )
+    blocked=None
+    for scope,subject,limit in rate_keys:
+        decision=record_failure(db,scope=scope,subject=subject,limit=limit)
+        if not decision.allowed:
+            blocked=decision
+    if blocked:
+        raise HTTPException(
+            status_code=429,
+            detail='Too many password recovery requests. Try again later.',
+            headers={'Retry-After':str(blocked.retry_after)},
+        )
+
     user = db.scalar(select(User).where(User.email == email))
     raw = create_password_reset(db, user)
     debug = os.getenv('WAZEN_PASSWORD_RESET_DEBUG', '').lower() in {'1','true','yes'}
