@@ -265,3 +265,8 @@ class ActivityLogCreateRequest(BaseModel):
     calories_credit: float = Field(gt=0, le=5000)
     source: Literal['MANUAL','WATCH','PHONE','WORKOUT'] = 'MANUAL'
     note: Optional[str] = Field(default=None, max_length=255)
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(min_length=1)
+    confirm: Literal['DELETE']
