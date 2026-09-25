@@ -47,6 +47,7 @@ from app.services.idempotency import begin_idempotent, finish_idempotent, abando
 from app.services.privacy import export_user_data, delete_user_data
 from app.services.source_quality import catalog_quality_report
 from app.services.auth_rate_limit import check_allowed, record_failure, clear_subject, cleanup_rate_limits, login_rate_keys, reset_rate_keys
+from app.services.security_events import log_security_event, list_security_events, clear_subject_security_events
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -54,7 +55,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.5.0')
+app = FastAPI(title='WAZEN API', version='2.6.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,6 +69,7 @@ app.add_middleware(
 @app.middleware('http')
 async def request_id_middleware(request: Request, call_next):
     request_id=request.headers.get('X-Request-ID') or str(uuid4())
+    request.state.request_id=request_id
     response=await call_next(request)
     response.headers['X-Request-ID']=request_id
     return response
@@ -100,7 +102,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.5.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.6.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -131,11 +133,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     email=req.email.strip().lower()
     client_host=request.client.host if request.client else None
+    request_id=getattr(request.state,'request_id',None)
     cleanup_rate_limits(db)
     rate_keys=login_rate_keys(email,client_host)
     for scope,subject,_limit in rate_keys:
         decision=check_allowed(db,scope,subject)
         if not decision.allowed:
+            log_security_event(db,event_type='LOGIN_THROTTLED',outcome='BLOCKED',subject=email,client_host=client_host,request_id=request_id,details={'scope':scope,'retry_after':decision.retry_after})
             raise HTTPException(
                 status_code=429,
                 detail='Too many authentication attempts. Try again later.',
@@ -150,28 +154,38 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
             if not decision.allowed:
                 blocked=decision
         if blocked:
+            log_security_event(db,event_type='LOGIN_THROTTLED',outcome='BLOCKED',user_id=u.id if u else None,subject=email,client_host=client_host,request_id=request_id,details={'retry_after':blocked.retry_after})
             raise HTTPException(
                 status_code=429,
                 detail='Too many authentication attempts. Try again later.',
                 headers={'Retry-After':str(blocked.retry_after)},
             )
+        log_security_event(db,event_type='LOGIN',outcome='FAILURE',user_id=u.id if u else None,subject=email,client_host=client_host,request_id=request_id)
         raise HTTPException(status_code=401, detail='Invalid credentials')
 
     clear_subject(db,'LOGIN_EMAIL',email)
-    return envelope({'user_id': u.id, **issue_session(db, u.id)})
+    session=issue_session(db, u.id)
+    log_security_event(db,event_type='LOGIN',outcome='SUCCESS',user_id=u.id,subject=email,client_host=client_host,request_id=request_id,details={'session_id':session.get('session_id')})
+    return envelope({'user_id': u.id, **session})
 
 
 @app.post('/api/v1/auth/refresh')
-def refresh_auth(req: RefreshTokenRequest, db: Session = Depends(get_db)):
+def refresh_auth(req: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
+    request_id=getattr(request.state,'request_id',None)
+    client_host=request.client.host if request.client else None
     try:
-        return envelope(rotate_session(db, req.refresh_token))
+        data=rotate_session(db, req.refresh_token)
+        log_security_event(db,event_type='TOKEN_REFRESH',outcome='SUCCESS',client_host=client_host,request_id=request_id,details={'session_id':data.get('session_id')})
+        return envelope(data)
     except ValueError:
+        log_security_event(db,event_type='TOKEN_REFRESH',outcome='FAILURE',client_host=client_host,request_id=request_id)
         raise HTTPException(status_code=401, detail='Invalid or expired refresh token')
 
 
 @app.post('/api/v1/auth/logout')
 def logout_auth(
     req: LogoutRequest,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -179,6 +193,7 @@ def logout_auth(
         revoked = revoke_all_sessions(db, user.id)
     else:
         revoked = 1 if revoke_session(db, req.refresh_token, user.id) else 0
+    log_security_event(db,event_type='LOGOUT_ALL' if req.all_sessions else 'LOGOUT',outcome='SUCCESS',user_id=user.id,client_host=request.client.host if request.client else None,request_id=getattr(request.state,'request_id',None),details={'revoked_sessions':revoked})
     return envelope({'logged_out': True, 'revoked_sessions': revoked})
 
 
@@ -195,11 +210,13 @@ def active_auth_sessions(
 def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
     email = req.email.strip().lower()
     client_host=request.client.host if request.client else None
+    request_id=getattr(request.state,'request_id',None)
     cleanup_rate_limits(db)
     rate_keys=reset_rate_keys(email,client_host)
     for scope,subject,_limit in rate_keys:
         decision=check_allowed(db,scope,subject)
         if not decision.allowed:
+            log_security_event(db,event_type='PASSWORD_RESET_THROTTLED',outcome='BLOCKED',subject=email,client_host=client_host,request_id=request_id,details={'scope':scope,'retry_after':decision.retry_after})
             raise HTTPException(
                 status_code=429,
                 detail='Too many password recovery requests. Try again later.',
@@ -211,6 +228,7 @@ def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = 
         if not decision.allowed:
             blocked=decision
     if blocked:
+        log_security_event(db,event_type='PASSWORD_RESET_THROTTLED',outcome='BLOCKED',subject=email,client_host=client_host,request_id=request_id,details={'retry_after':blocked.retry_after})
         raise HTTPException(
             status_code=429,
             detail='Too many password recovery requests. Try again later.',
@@ -228,15 +246,20 @@ def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = 
     }
     if debug and raw:
         data['debug_reset_token'] = raw
+    log_security_event(db,event_type='PASSWORD_RESET_REQUEST',outcome='ACCEPTED',user_id=user.id if user else None,subject=email,client_host=client_host,request_id=request_id,details={'delivery':data['delivery']})
     return envelope(data)
 
 
 @app.post('/api/v1/auth/reset-password')
-def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+def reset_password(req: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    request_id=getattr(request.state,'request_id',None)
+    client_host=request.client.host if request.client else None
     try:
-        consume_password_reset(db, req.token, req.new_password)
+        user=consume_password_reset(db, req.token, req.new_password)
     except ValueError:
+        log_security_event(db,event_type='PASSWORD_RESET',outcome='FAILURE',client_host=client_host,request_id=request_id)
         raise HTTPException(status_code=400, detail='Invalid or expired reset token')
+    log_security_event(db,event_type='PASSWORD_RESET',outcome='SUCCESS',user_id=user.id,subject=user.email,client_host=client_host,request_id=request_id)
     return envelope({'reset': True})
 
 
@@ -278,6 +301,7 @@ def delete_me(
         raise HTTPException(status_code=401,detail='Invalid password')
     clear_subject(db,'LOGIN_EMAIL',user.email)
     clear_subject(db,'RESET_EMAIL',user.email)
+    clear_subject_security_events(db,user.email)
     counts=delete_user_data(db,user.id)
     return envelope({
         'deleted':True,
@@ -1340,6 +1364,18 @@ def admin_data_quality(
     db: Session = Depends(get_db),
 ):
     return envelope(catalog_quality_report(db,limit))
+
+
+@app.get('/api/v1/admin/security-events')
+def admin_security_events(
+    event_type: Optional[str] = None,
+    outcome: Optional[str] = None,
+    limit: int = 100,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    items=list_security_events(db,event_type=event_type,outcome=outcome,limit=limit)
+    return envelope({'items':items,'count':len(items)})
 
 
 @app.get('/api/v1/admin/audit')
