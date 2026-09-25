@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -18,7 +18,7 @@ client=TestClient(app)
 
 
 def _user_id():
-    email=f"idem-recovery-{datetime.utcnow().timestamp()}@example.com"
+    email=f"idem-recovery-{datetime.now(timezone.utc).replace(tzinfo=None).timestamp()}@example.com"
     r=client.post('/api/v1/auth/register',json={
         'email':email,
         'password':'StrongPass123!',
@@ -43,7 +43,7 @@ def test_stale_pending_claim_can_be_recovered_and_completed():
             idempotency_key=key,
             request_hash=_payload_hash(payload),
             state='PENDING',
-            created_at=datetime.utcnow()-timedelta(seconds=STALE_SECONDS+10),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(seconds=STALE_SECONDS+10),
         )
         db.add(row)
         db.commit()
@@ -78,7 +78,7 @@ def test_non_stale_pending_claim_still_blocks_parallel_retry():
             idempotency_key=key,
             request_hash=_payload_hash(payload),
             state='PENDING',
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         db.add(row)
         db.commit()
@@ -105,8 +105,8 @@ def test_old_completed_records_are_cleaned_on_next_protected_write():
             request_hash=_payload_hash({'old':True}),
             state='COMPLETED',
             response_json='{"success":true}',
-            created_at=datetime.utcnow()-timedelta(hours=RETENTION_HOURS+2),
-            completed_at=datetime.utcnow()-timedelta(hours=RETENTION_HOURS+1),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(hours=RETENTION_HOURS+2),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(hours=RETENTION_HOURS+1),
         )
         db.add(old)
         db.commit()
@@ -140,7 +140,7 @@ def test_stale_key_with_different_payload_still_conflicts():
             idempotency_key=key,
             request_hash=_payload_hash(original),
             state='PENDING',
-            created_at=datetime.utcnow()-timedelta(seconds=STALE_SECONDS+10),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(seconds=STALE_SECONDS+10),
         )
         db.add(row)
         db.commit()
@@ -175,8 +175,8 @@ def test_retention_does_not_delete_recent_completed_record():
             request_hash=_payload_hash(payload),
             state='COMPLETED',
             response_json='{"success":true,"data":{"activity_credit":80}}',
-            created_at=datetime.utcnow()-timedelta(minutes=10),
-            completed_at=datetime.utcnow()-timedelta(minutes=9),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(minutes=10),
+            completed_at=datetime.now(timezone.utc).replace(tzinfo=None)-timedelta(minutes=9),
         )
         db.add(row)
         db.commit()
