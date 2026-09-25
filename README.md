@@ -349,3 +349,10 @@ Unified Add Food flow:
 - Covered manual food logging, catalog logging, modified-catalog logging, duplicate meal logging and favorite re-logging.
 - Flutter generates one idempotency key per user action and preserves it across automatic auth-refresh retries.
 - Added Alembic revision `0002_idempotency` and migration-head coverage.
+
+
+## v49 — Retry Resilience Completion
+- Golden Flow accepts Idempotency-Key so an auth/network retry cannot duplicate an optional auto-logged meal or duplicate the same audited decision response.
+- Manual activity credit logging is idempotent and cannot double-count calories after a retry.
+- Flutter preserves the same per-action key through automatic token refresh/retry for both flows.
+- Backend v49 baseline: **130 passing tests**.
