@@ -8,7 +8,7 @@ from app.models.db_models import (
     User, UserProfile, FoodLog, RecommendationFeedback, WeeklyPlanItem,
     WeightHistory, AuthSession, PasswordResetToken, GoalHistory,
     UserPreferenceSetting, HealthLimit, FavoriteMeal, ActivityLog,
-    RecommendationExclusionLog, RecommendationDecisionLog, IdempotencyRecord,
+    RecommendationExclusionLog, RecommendationDecisionLog, IdempotencyRecord, SecurityEvent,
 )
 
 
@@ -27,6 +27,7 @@ EXPORT_MODELS = (
 )
 
 DELETE_MODELS = (
+    SecurityEvent,
     IdempotencyRecord,
     RecommendationDecisionLog,
     RecommendationExclusionLog,
