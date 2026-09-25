@@ -97,5 +97,8 @@ These do not block local Alpha application logic, but they are not considered pr
 - v56: privacy-preserving security event audit.
 - v57: production observability for 5xx/slow requests plus operations alert summary.
 - v58: automated PostgreSQL backup/restore/readiness drill plus operator runbook.
+- v59: enumeration-safe SMTP password-reset delivery adapter.
+- v60: truthful integration capability registry and capability-aware client options.
+- v61: machine-readable Production Launch Gate plus operator launch checklist.
 
-Current verified engineering baseline: **164 backend tests passing**, Flutter validation passing, Docker migration/readiness smoke passing.
+Current verified engineering baseline: **179 backend tests passing**, Flutter validation passing, Docker migration/readiness smoke passing, PostgreSQL backup/restore drill passing.
