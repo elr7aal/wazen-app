@@ -459,6 +459,7 @@ class WazenApi {
       body:jsonEncode({'token':resetToken,'new_password':newPassword}),
     );
     _unwrap(r);
+    await clearSession();
   }
 
 
