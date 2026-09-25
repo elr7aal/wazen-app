@@ -84,6 +84,7 @@ def begin_idempotent(
         raise ValueError('INVALID_IDEMPOTENCY_KEY')
 
     now=_now()
+    cleanup_idempotency_records(db,now)
     digest=_payload_hash(payload)
     existing=_lookup(db,user_id,method,path,key)
     if existing:
