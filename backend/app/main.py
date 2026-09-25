@@ -839,7 +839,15 @@ def rebalance_for_me(user: User = Depends(get_current_user), db: Session = Depen
         budget_max=None,
         allow_modifications=True,
     )
-    next_options = recs.get('results', [])[:5]
+    ranked_options = recs.get('results', [])
+    if state.remaining_calories <= 0:
+        next_options = [
+            x for x in ranked_options
+            if (x.get('nutrition') or {}).get('calories') is not None
+            and float(x['nutrition']['calories']) <= recommendation_ceiling * 1.15
+        ][:5]
+    else:
+        next_options = ranked_options[:5]
 
     if state.remaining_calories <= 0:
         headline = 'تم تحديث يومك'
