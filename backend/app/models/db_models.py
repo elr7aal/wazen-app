@@ -338,3 +338,17 @@ class IdempotencyRecord(Base):
     response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AuthRateLimit(Base):
+    __tablename__ = 'auth_rate_limits'
+    __table_args__ = (
+        UniqueConstraint('scope','subject_hash',name='uq_auth_rate_limit_scope_subject'),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    scope: Mapped[str] = mapped_column(String(32), index=True)
+    subject_hash: Mapped[str] = mapped_column(String(64), index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
