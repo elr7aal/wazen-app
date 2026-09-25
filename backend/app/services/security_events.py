@@ -75,3 +75,11 @@ def list_security_events(
         'details':json.loads(x.details_json or '{}'),
         'created_at':x.created_at.isoformat(),
     } for x in rows]
+
+
+
+def clear_subject_security_events(db: Session,subject: str) -> int:
+    digest=subject_hash(subject)
+    result=db.execute(delete(SecurityEvent).where(SecurityEvent.subject_hash==digest))
+    db.commit()
+    return int(result.rowcount or 0)
