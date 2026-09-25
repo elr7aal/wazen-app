@@ -40,11 +40,31 @@ class RecommendationCard extends StatelessWidget {
             Wrap(spacing: 8, runSpacing: 8, children: [
               _chip('${item.nutrition.calories?.toStringAsFixed(0) ?? '—'} kcal'),
               _chip('${item.nutrition.proteinG?.toStringAsFixed(0) ?? '—'}g بروتين'),
+              if(item.price!=null)_chip('${item.currency??'AED'} ${item.price!.toStringAsFixed(0)}'),
               _chip(decisionLabel),
             ]),
             if (item.reasons.isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(_translateReason(item.reasons.first), style: const TextStyle(color: Colors.black87, height: 1.4)),
+            ],
+            if(item.warnings.isNotEmpty)...[
+              const SizedBox(height:10),
+              Wrap(
+                spacing:6,
+                runSpacing:6,
+                children:item.warnings.map((w)=>Container(
+                  padding:const EdgeInsets.symmetric(horizontal:9,vertical:6),
+                  decoration:BoxDecoration(
+                    color:const Color(0xFFFFF3E0),
+                    borderRadius:BorderRadius.circular(10),
+                  ),
+                  child:Row(mainAxisSize:MainAxisSize.min,children:[
+                    const Icon(Icons.warning_amber_rounded,size:15,color:Colors.orange),
+                    const SizedBox(width:4),
+                    Text(_translateWarning(w),style:const TextStyle(fontSize:11)),
+                  ]),
+                )).toList(),
+              ),
             ],
             const SizedBox(height: 8),
             Row(children:[
@@ -70,6 +90,22 @@ class RecommendationCard extends StatelessWidget {
     if (value.contains('Fits the requested')) return 'يناسب سياق السعرات الذي طلبته.';
     if (value.contains('Close to the requested')) return 'قريب من حد السعرات الذي طلبته.';
     if (value.contains('modification may help')) return 'أعلى من المطلوب، لكن يمكن نوازنه بتعديل الوجبة.';
+    if (value.contains('remaining protein')) return 'يساعدك على تغطية احتياج البروتين المتبقي.';
+    if (value.contains('marked LOVE')) return 'يتوافق مع شيء حددته ضمن المفضلات.';
+    if (value.contains('marked LIKE')) return 'يتوافق مع أحد تفضيلاتك.';
     return value;
+  }
+
+  String _translateWarning(String value) {
+    switch(value){
+      case 'HIGH_SODIUM_FOR_REMAINING_DAY': return 'صوديوم مرتفع بالنسبة لباقي اليوم';
+      case 'OVER_BUDGET': return 'أعلى من الميزانية المحددة';
+      case 'ALLERGEN_CROSS_CONTACT_WARNING': return 'يوجد تنبيه احتمال تلامس مع مسبب حساسية';
+      case 'MISSING_HEALTH_DATA': return 'بعض البيانات الصحية غير متوفرة';
+      default:
+        if(value.startsWith('MISSING_')) return 'بيانات غذائية مطلوبة غير متوفرة';
+        if(value.endsWith('_MAX_LIMIT')||value.endsWith('_MIN_LIMIT')) return 'يتجاوز حدًا صحيًا مرنًا';
+        return value;
+    }
   }
 }
