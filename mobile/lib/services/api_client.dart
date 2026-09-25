@@ -171,7 +171,7 @@ class WazenApi {
         await _withAuthRetry(()=>http.post(
           Uri.parse('$baseUrl/auth/logout'),
           headers:_headers,
-          body:jsonEncode({'refresh_token':refresh,'all_sessions':allSessions}),
+          body:jsonEncode({'refresh_token':refreshToken,'all_sessions':allSessions}),
         ));
       }catch(_){}
     }
