@@ -1,6 +1,7 @@
 import re
 import os
 import secrets
+import time
 from uuid import uuid4
 from typing import Optional, Any, Literal
 from datetime import date
@@ -48,6 +49,7 @@ from app.services.privacy import export_user_data, delete_user_data
 from app.services.source_quality import catalog_quality_report
 from app.services.auth_rate_limit import check_allowed, record_failure, clear_subject, cleanup_rate_limits, login_rate_keys, reset_rate_keys
 from app.services.security_events import log_security_event, list_security_events, clear_subject_security_events
+from app.services.observability import log_operational_event, list_operational_events, operations_summary, SLOW_REQUEST_MS
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -55,7 +57,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.6.0')
+app = FastAPI(title='WAZEN API', version='2.7.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,7 +73,52 @@ async def request_id_middleware(request: Request, call_next):
     supplied=(request.headers.get('X-Request-ID') or '').strip()
     request_id=(supplied[:80] if supplied else str(uuid4()))
     request.state.request_id=request_id
-    response=await call_next(request)
+    started=time.perf_counter()
+    try:
+        response=await call_next(request)
+    except Exception as exc:
+        duration_ms=(time.perf_counter()-started)*1000
+        try:
+            with SessionLocal() as audit_db:
+                log_operational_event(
+                    audit_db,
+                    event_type='HTTP_5XX',
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=500,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                    details={'exception_type':type(exc).__name__},
+                )
+        except Exception:
+            pass
+        raise
+
+    duration_ms=(time.perf_counter()-started)*1000
+    try:
+        with SessionLocal() as audit_db:
+            if response.status_code>=500:
+                log_operational_event(
+                    audit_db,
+                    event_type='HTTP_5XX',
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+            if duration_ms>=SLOW_REQUEST_MS:
+                log_operational_event(
+                    audit_db,
+                    event_type='SLOW_REQUEST',
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    duration_ms=duration_ms,
+                    request_id=request_id,
+                )
+    except Exception:
+        pass
     response.headers['X-Request-ID']=request_id
     return response
 
@@ -103,7 +150,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.6.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.7.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -1377,6 +1424,26 @@ def admin_security_events(
 ):
     items=list_security_events(db,event_type=event_type,outcome=outcome,limit=limit)
     return envelope({'items':items,'count':len(items)})
+
+
+@app.get('/api/v1/admin/operational-events')
+def admin_operational_events(
+    event_type: Optional[str] = None,
+    status_code: Optional[int] = None,
+    limit: int = 100,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    items=list_operational_events(db,event_type=event_type,status_code=status_code,limit=limit)
+    return envelope({'items':items,'count':len(items)})
+
+
+@app.get('/api/v1/admin/operations/summary')
+def admin_operations_summary(
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return envelope(operations_summary(db,readiness_status(db,_runtime_config)))
 
 
 @app.get('/api/v1/admin/audit')
