@@ -33,6 +33,7 @@ def test_alembic_baseline_creates_current_schema_and_is_idempotent(tmp_path):
     engine=sa.create_engine(url)
     inspector=sa.inspect(engine)
     tables=set(inspector.get_table_names())
+    users_cols={x['name'] for x in inspector.get_columns('users')}
 
     assert 'email_verified' in users_cols
     assert 'email_verified_at' in users_cols
