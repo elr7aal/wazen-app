@@ -228,5 +228,7 @@ def serialize_food(item: FoodItem):
         },
         'allergens':[a.allergen_code for a in item.allergens],
         'source_confidence': source.confidence_level if source else None,
+        'source_name': source.source_name if source else None,
         'source_reference': source.source_reference if source else None,
+        'source_verified_at': source.verified_at.isoformat() if source and source.verified_at else None,
     }
