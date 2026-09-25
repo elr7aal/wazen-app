@@ -823,30 +823,42 @@ def add_modified_catalog_food(req: ModifiedCatalogFoodLogRequest, user: User = D
 def rebalance_for_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     daily_req = build_daily_request(db, user)
     state = calculate_daily_state(daily_req)
+
+    if state.remaining_calories > 0:
+        recommendation_ceiling = state.remaining_calories
+        strategy = 'USE_REMAINING'
+    else:
+        recommendation_ceiling = max(250.0, min(600.0, daily_req.target_calories * 0.20))
+        strategy = 'LIGHTER_NEXT_OPTIONS'
+
     recs = recommend_for_user(
         db, user,
         vendor=None,
         category=None,
-        max_calories=state.remaining_calories if state.remaining_calories > 0 else None,
+        max_calories=recommendation_ceiling,
         budget_max=None,
         allow_modifications=True,
     )
-    # Keep the response useful and compact for the post-meal screen.
     next_options = recs.get('results', [])[:5]
+
     if state.remaining_calories <= 0:
         headline = 'تم تحديث يومك'
-        message = 'وصلت أو تجاوزت هدف السعرات الحالي. ما في مشكلة — نقدر نخلي باقي اليوم أخف حسب احتياجك.'
+        message = 'اختيارك محفوظ. إذا احتجت شيء لاحقًا، هذه خيارات أخف تساعدك تكمل يومك بدون إلغاء الوجبة اللي اخترتها.'
     elif state.protein_gap_g > 20:
         headline = 'باقي لك بروتين اليوم'
         message = f'باقي تقريبًا {state.remaining_calories:.0f} سعرة و{state.protein_gap_g:.0f}g بروتين. هذه أقرب الخيارات للمتبقي.'
     else:
         headline = 'يومك متوازن'
         message = f'باقي تقريبًا {state.remaining_calories:.0f} سعرة. هذه خيارات تناسب المساحة المتبقية.'
+
     return envelope({
         'daily_totals': today_totals(db, user.id),
         'daily_state': state.model_dump(),
         'headline': headline,
         'message': message,
+        'user_choice_preserved': True,
+        'strategy': strategy,
+        'recommendation_calorie_ceiling': recommendation_ceiling,
         'next_options': next_options,
     })
 
