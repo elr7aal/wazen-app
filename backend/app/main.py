@@ -51,6 +51,7 @@ from app.services.auth_rate_limit import check_allowed, record_failure, clear_su
 from app.services.security_events import log_security_event, list_security_events, clear_subject_security_events
 from app.services.observability import log_operational_event, list_operational_events, operations_summary, SLOW_REQUEST_MS
 from app.services.email_delivery import send_password_reset_email, password_reset_delivery_available
+from app.services.integration_capabilities import integration_capabilities, integration_admin_summary
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -58,7 +59,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.8.0')
+app = FastAPI(title='WAZEN API', version='2.9.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -151,7 +152,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.8.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.9.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -160,6 +161,11 @@ def readiness(response: Response, db: Session = Depends(get_db)):
     if not data['ready']:
         response.status_code=503
     return envelope(data)
+
+
+@app.get('/api/v1/capabilities')
+def capabilities():
+    return envelope(integration_capabilities(_runtime_config))
 
 
 # -------- Authentication --------
@@ -1467,6 +1473,13 @@ def admin_operations_summary(
     db: Session = Depends(get_db),
 ):
     return envelope(operations_summary(db,readiness_status(db,_runtime_config)))
+
+
+@app.get('/api/v1/admin/integrations')
+def admin_integrations(
+    actor: str = Depends(require_admin),
+):
+    return envelope(integration_admin_summary(_runtime_config))
 
 
 @app.get('/api/v1/admin/audit')
