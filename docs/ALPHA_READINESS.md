@@ -59,7 +59,7 @@ These do not block local Alpha application logic, but they are not considered pr
 - Mobile-number OTP provider.
 - Password-reset email delivery provider.
 - Production Vision provider/API key for image analysis.
-- Production PostgreSQL credentials/backups/restore drill (migration framework is ready).
+- Production PostgreSQL credentials and managed-provider backup retention remain external; repository CI now performs a full PostgreSQL dump/restore/readiness drill.
 - Native iOS signing / App Store or Ad Hoc distribution.
 - Production hosting/domain/deployment verification.
 
@@ -96,5 +96,6 @@ These do not block local Alpha application logic, but they are not considered pr
 - v55: database-backed authentication abuse protection.
 - v56: privacy-preserving security event audit.
 - v57: production observability for 5xx/slow requests plus operations alert summary.
+- v58: automated PostgreSQL backup/restore/readiness drill plus operator runbook.
 
 Current verified engineering baseline: **164 backend tests passing**, Flutter validation passing, Docker migration/readiness smoke passing.
