@@ -67,6 +67,36 @@ class WazenApi {
         if (token != null) 'Authorization': 'Bearer $token',
       };
 
+
+  Future<bool>? _refreshInFlight;
+
+  Future<bool> _refreshOnce() {
+    final current=_refreshInFlight;
+    if(current!=null)return current;
+
+    final future=refreshSession();
+    _refreshInFlight=future;
+    future.whenComplete((){
+      if(identical(_refreshInFlight,future))_refreshInFlight=null;
+    });
+    return future;
+  }
+
+  Future<http.Response> _withAuthRetry(
+    Future<http.Response> Function() request,
+  ) async {
+    var response=await request();
+    if(response.statusCode!=401 || refreshToken==null || refreshToken!.isEmpty){
+      return response;
+    }
+
+    final refreshed=await _refreshOnce();
+    if(!refreshed)return response;
+
+    response=await request();
+    return response;
+  }
+
   dynamic _unwrap(http.Response response) {
     final body = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -138,23 +168,23 @@ class WazenApi {
     final refresh=refreshToken;
     if(access!=null&&refresh!=null){
       try{
-        await http.post(
+        await _withAuthRetry(()=>http.post(
           Uri.parse('$baseUrl/auth/logout'),
           headers:_headers,
           body:jsonEncode({'refresh_token':refresh,'all_sessions':allSessions}),
-        );
+        ));
       }catch(_){}
     }
     await clearSession();
   }
 
   Future<Map<String, dynamic>> me() async {
-    final r = await http.get(Uri.parse('$baseUrl/users/me'), headers: _headers);
+    final r = await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/users/me'), headers: _headers));
     return Map<String, dynamic>.from(_unwrap(r));
   }
 
   Future<DailyState> todayState() async {
-    final r = await http.get(Uri.parse('$baseUrl/nutrition/today'), headers: _headers);
+    final r = await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/nutrition/today'), headers: _headers));
     final data = Map<String, dynamic>.from(_unwrap(r));
     return DailyState.fromJson(Map<String, dynamic>.from(data['daily_state']));
   }
@@ -162,19 +192,19 @@ class WazenApi {
 
 
   Future<Map<String,dynamic>> parseCraving(String text) async {
-    final r=await http.post(
+    final r=await _withAuthRetry(()=>http.post(
       Uri.parse('$baseUrl/cravings/parse'),
       headers:_headers,
       body:jsonEncode({'text':text}),
-    );
+    ));
     return Map<String,dynamic>.from(_unwrap(r));
   }
   Future<List<RecommendationItem>> goldenFlow(String craving) async {
-    final r = await http.post(Uri.parse('$baseUrl/golden-flow'), headers: _headers, body: jsonEncode({
+    final r = await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/golden-flow'), headers: _headers, body: jsonEncode({
       'craving_text': craving,
       'meal_type': 'DINNER',
       'allow_modifications': true,
-    }));
+    })));
     final data = Map<String, dynamic>.from(_unwrap(r));
     final recommendation = Map<String, dynamic>.from(data['recommendations']);
     return ((recommendation['results'] as List?) ?? const [])
@@ -183,43 +213,43 @@ class WazenApi {
   }
 
   Future<FoodDetail> foodDetail(String foodId) async {
-    final r = await http.get(Uri.parse('$baseUrl/foods/$foodId'), headers: _headers);
+    final r = await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/foods/$foodId'), headers: _headers));
     return FoodDetail.fromJson(Map<String, dynamic>.from(_unwrap(r)));
   }
 
   Future<DailyState> logFromCatalog(String foodId, {String mealType = 'DINNER', double quantity = 1}) async {
-    final r = await http.post(Uri.parse('$baseUrl/food-log/from-catalog'), headers: _headers, body: jsonEncode({
+    final r = await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/from-catalog'), headers: _headers, body: jsonEncode({
       'food_id': foodId,
       'meal_type': mealType,
       'quantity': quantity,
       'entry_method': 'RECOMMENDATION',
-    }));
+    })));
     final data = Map<String, dynamic>.from(_unwrap(r));
     return DailyState.fromJson(Map<String, dynamic>.from(data['daily_state']));
   }
 
 
   Future<List<ModifierOption>> makeItFitOptions(String foodId) async {
-    final r=await http.get(Uri.parse('$baseUrl/foods/$foodId/make-it-fit-options'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/foods/$foodId/make-it-fit-options'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['options'] as List?)??const []).map((e)=>ModifierOption.fromJson(Map<String,dynamic>.from(e as Map))).toList();
   }
 
   Future<MakeItFitPreview> makeItFitPreview(String foodId,List<String> components) async {
-    final sr=await http.get(Uri.parse('$baseUrl/nutrition/today'),headers:_headers);
+    final sr=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/nutrition/today'),headers:_headers));
     final sd=Map<String,dynamic>.from(_unwrap(sr));
-    final r=await http.post(Uri.parse('$baseUrl/recommendations/make-it-fit'),headers:_headers,body:jsonEncode({
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/recommendations/make-it-fit'),headers:_headers,body:jsonEncode({
       'food_id':foodId,
       'daily_state':Map<String,dynamic>.from(sd['daily_request'] as Map),
       'included_components':components,
-    }));
+    })));
     return MakeItFitPreview.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
   Future<DailyState> logModifiedFromCatalog(String foodId,List<String> components,{String mealType='DINNER',double quantity=1}) async {
-    final r=await http.post(Uri.parse('$baseUrl/food-log/from-modified-catalog'),headers:_headers,body:jsonEncode({
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/from-modified-catalog'),headers:_headers,body:jsonEncode({
       'food_id':foodId,'meal_type':mealType,'quantity':quantity,'included_components':components,
-    }));
+    })));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return DailyState.fromJson(Map<String,dynamic>.from(data['daily_state']));
   }
@@ -227,19 +257,19 @@ class WazenApi {
 
 
   Future<RebalanceData> rebalanceForMe() async {
-    final r = await http.get(Uri.parse('$baseUrl/rebalance/for-me'), headers: _headers);
+    final r = await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/rebalance/for-me'), headers: _headers));
     return RebalanceData.fromJson(Map<String, dynamic>.from(_unwrap(r)));
   }
 
 
 
   Future<FoodLogDay> foodLogToday() async {
-    final r=await http.get(Uri.parse('$baseUrl/food-log/today'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/food-log/today'),headers:_headers));
     return FoodLogDay.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
   Future<FoodLogDay> deleteFoodLog(String logId) async {
-    final r=await http.delete(Uri.parse('$baseUrl/food-log/$logId'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.delete(Uri.parse('$baseUrl/food-log/$logId'),headers:_headers));
     _unwrap(r);
     return foodLogToday();
   }
@@ -261,7 +291,7 @@ class WazenApi {
       if(fatG!=null)'fat_g':fatG,
       if(sodiumMg!=null)'sodium_mg':sodiumMg,
     };
-    final r=await http.patch(Uri.parse('$baseUrl/food-log/$logId'),headers:_headers,body:jsonEncode(body));
+    final r=await _withAuthRetry(()=>http.patch(Uri.parse('$baseUrl/food-log/$logId'),headers:_headers,body:jsonEncode(body)));
     _unwrap(r);
     return foodLogToday();
   }
@@ -293,25 +323,25 @@ class WazenApi {
       'limit':'$limit',
     };
     final uri=Uri.parse('$baseUrl/foods/search').replace(queryParameters:params);
-    final r=await http.get(uri,headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(uri,headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['items'] as List?)??const [])
       .map((e)=>FoodDetail.fromJson(Map<String,dynamic>.from(e as Map))).toList();
   }
 
   Future<FoodDetail?> barcodeLookup(String barcode) async {
-    final r=await http.get(Uri.parse('$baseUrl/foods/barcode/$barcode'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/foods/barcode/$barcode'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     if(data['found']!=true || data['item']==null)return null;
     return FoodDetail.fromJson(Map<String,dynamic>.from(data['item'] as Map));
   }
 
   Future<Map<String,dynamic>> parseFoodTextDetailed(String text,{String mealType='SNACK'}) async {
-    final r=await http.post(
+    final r=await _withAuthRetry(()=>http.post(
       Uri.parse('$baseUrl/food-log/parse-text'),
       headers:_headers,
       body:jsonEncode({'text':text,'meal_type':mealType}),
-    );
+    ));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
@@ -322,71 +352,71 @@ class WazenApi {
   }
 
   Future<Map<String,dynamic>> analyzeFoodImage(String imageBase64,{String? caption,String mealType='SNACK'}) async {
-    final r=await http.post(Uri.parse('$baseUrl/food-log/analyze-image'),headers:_headers,body:jsonEncode({
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/analyze-image'),headers:_headers,body:jsonEncode({
       'image_base64':imageBase64,'user_caption':caption,'meal_type':mealType,
-    }));
+    })));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
 
 
   Future<bool> onboardingStatus() async {
-    final r=await http.get(Uri.parse('$baseUrl/onboarding/status'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/onboarding/status'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return data['complete']==true;
   }
 
   Future<Map<String,dynamic>> completeOnboarding(Map<String,dynamic> payload) async {
-    final r=await http.post(Uri.parse('$baseUrl/onboarding/complete'),headers:_headers,body:jsonEncode(payload));
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/onboarding/complete'),headers:_headers,body:jsonEncode(payload)));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
 
 
   Future<void> sendRecommendationFeedback(String foodId,String action) async {
-    final r=await http.post(Uri.parse('$baseUrl/recommendations/feedback'),headers:_headers,body:jsonEncode({
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/recommendations/feedback'),headers:_headers,body:jsonEncode({
       'food_id':foodId,'action':action,
-    }));
+    })));
     _unwrap(r);
   }
 
 
 
   Future<Map<String,dynamic>> updateProfile(Map<String,dynamic> payload) async {
-    final r=await http.patch(Uri.parse('$baseUrl/users/me'),headers:_headers,body:jsonEncode(payload));
+    final r=await _withAuthRetry(()=>http.patch(Uri.parse('$baseUrl/users/me'),headers:_headers,body:jsonEncode(payload)));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
   Future<Map<String,dynamic>> recalculatePlan(Map<String,dynamic> payload) async {
-    final r=await http.post(Uri.parse('$baseUrl/profile/recalculate-plan'),headers:_headers,body:jsonEncode(payload));
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/profile/recalculate-plan'),headers:_headers,body:jsonEncode(payload)));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
   Future<Map<String,dynamic>> profileInsights() async {
-    final r=await http.get(Uri.parse('$baseUrl/profile/insights'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/profile/insights'),headers:_headers));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
 
   Future<WeeklyPlan> weeklyPlan() async {
-    final r=await http.get(Uri.parse('$baseUrl/plan/week'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/plan/week'),headers:_headers));
     return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
   Future<WeeklyPlan> regenerateWeeklyPlan() async {
-    final r=await http.post(Uri.parse('$baseUrl/plan/week/generate'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/plan/week/generate'),headers:_headers));
     return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
   Future<WeeklyPlan> rebalancePlanDay(DateTime date) async {
     final d='${date.year.toString().padLeft(4,'0')}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}';
-    final r=await http.post(Uri.parse('$baseUrl/plan/day/$d/rebalance'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/plan/day/$d/rebalance'),headers:_headers));
     return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
   Future<ProgressSummary> progress(String range) async {
     final uri=Uri.parse('$baseUrl/progress').replace(queryParameters:{'range':range});
-    final r=await http.get(uri,headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(uri,headers:_headers));
     return ProgressSummary.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
@@ -412,7 +442,7 @@ class WazenApi {
 
   Future<List<Map<String,dynamic>>> goalHistory({int limit=20}) async {
     final uri=Uri.parse('$baseUrl/profile/history').replace(queryParameters:{'limit':'$limit'});
-    final r=await http.get(uri,headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(uri,headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['items'] as List?)??const [])
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
@@ -420,7 +450,7 @@ class WazenApi {
 
 
   Future<List<Map<String,dynamic>>> preferenceSettings() async {
-    final r=await http.get(Uri.parse('$baseUrl/preferences'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/preferences'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['items'] as List?)??const [])
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
@@ -431,7 +461,7 @@ class WazenApi {
     required String targetValue,
     required String level,
   }) async {
-    final r=await http.put(
+    final r=await _withAuthRetry(()=>http.put(
       Uri.parse('$baseUrl/preferences'),
       headers:_headers,
       body:jsonEncode({
@@ -439,13 +469,13 @@ class WazenApi {
         'target_value':targetValue,
         'level':level,
       }),
-    );
+    ));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
 
   Future<List<Map<String,dynamic>>> healthLimits() async {
-    final r=await http.get(Uri.parse('$baseUrl/health-limits'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/health-limits'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['items'] as List?)??const [])
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
@@ -461,7 +491,7 @@ class WazenApi {
     String? note,
     bool active=true,
   }) async {
-    final r=await http.put(
+    final r=await _withAuthRetry(()=>http.put(
       Uri.parse('$baseUrl/health-limits'),
       headers:_headers,
       body:jsonEncode({
@@ -474,64 +504,64 @@ class WazenApi {
         'note':note,
         'active':active,
       }),
-    );
+    ));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
 
   Future<FoodLogDay> duplicateFoodLog(String logId) async {
-    final r=await http.post(Uri.parse('$baseUrl/food-log/$logId/duplicate'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/$logId/duplicate'),headers:_headers));
     _unwrap(r);
     return foodLogToday();
   }
 
   Future<Map<String,dynamic>> favoriteFoodLog(String logId) async {
-    final r=await http.post(Uri.parse('$baseUrl/food-log/$logId/favorite'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/$logId/favorite'),headers:_headers));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
   Future<List<Map<String,dynamic>>> favoriteMeals() async {
-    final r=await http.get(Uri.parse('$baseUrl/food-log/favorites'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/food-log/favorites'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['items'] as List?)??const [])
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
   }
 
   Future<FoodLogDay> logFavoriteMeal(String favoriteId,{String? mealType}) async {
-    final r=await http.post(
+    final r=await _withAuthRetry(()=>http.post(
       Uri.parse('$baseUrl/food-log/favorites/$favoriteId/log'),
       headers:_headers,
       body:jsonEncode({'meal_type':mealType}),
-    );
+    ));
     _unwrap(r);
     return foodLogToday();
   }
 
 
   Future<Map<String,dynamic>> activityToday() async {
-    final r=await http.get(Uri.parse('$baseUrl/activity-log/today'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/activity-log/today'),headers:_headers));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
   Future<DailyState> addActivityCredit(double caloriesCredit,{String source='MANUAL',String? note}) async {
-    final r=await http.post(
+    final r=await _withAuthRetry(()=>http.post(
       Uri.parse('$baseUrl/activity-log'),
       headers:_headers,
       body:jsonEncode({'calories_credit':caloriesCredit,'source':source,'note':note}),
-    );
+    ));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return DailyState.fromJson(Map<String,dynamic>.from(data['daily_state'] as Map));
   }
 
   Future<DailyState> deleteActivityCredit(String activityId) async {
-    final r=await http.delete(Uri.parse('$baseUrl/activity-log/$activityId'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.delete(Uri.parse('$baseUrl/activity-log/$activityId'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return DailyState.fromJson(Map<String,dynamic>.from(data['daily_state'] as Map));
   }
 
 
   Future<List<Map<String,dynamic>>> activeSessions() async {
-    final r=await http.get(Uri.parse('$baseUrl/auth/sessions'),headers:_headers);
+    final r=await _withAuthRetry(()=>http.get(Uri.parse('$baseUrl/auth/sessions'),headers:_headers));
     final data=Map<String,dynamic>.from(_unwrap(r));
     return ((data['items'] as List?)??const [])
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
