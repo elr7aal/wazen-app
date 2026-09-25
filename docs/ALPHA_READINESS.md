@@ -4,9 +4,10 @@ Updated: 2026-09-25
 
 ## Automated quality gate
 
-- Backend: **106 / 106 tests passing**
+- Backend: **122 / 122 tests passing**
 - Flutter model tests: passing
 - Flutter web validation build: passing
+- Migration-first Docker readiness smoke test: passing
 - Deployment: intentionally paused; this document covers application readiness, not hosting readiness.
 
 ## Official QA checklist
@@ -58,7 +59,7 @@ These do not block local Alpha application logic, but they are not considered pr
 - Mobile-number OTP provider.
 - Password-reset email delivery provider.
 - Production Vision provider/API key for image analysis.
-- Production PostgreSQL persistence and backups.
+- Production PostgreSQL credentials/backups/restore drill (migration framework is ready).
 - Native iOS signing / App Store or Ad Hoc distribution.
 - Production hosting/domain/deployment verification.
 
@@ -74,3 +75,20 @@ These do not block local Alpha application logic, but they are not considered pr
 8. Rebalance preserves the user's chosen meal and adjusts later suggestions without guilt/shaming copy.
 9. Recommendation exclusions and ranked decisions are auditable.
 10. Source confidence and verification metadata stay visible where available.
+
+
+## Post-gate hardening completed
+
+- v37: explicit condition context, non-prescriptive by design.
+- v38: active sessions and logout-all-devices.
+- v39: Alembic baseline and migration idempotency.
+- v40: password policy and expired-access-token acceptance tests.
+- v41: production runtime guardrails for JWT/CORS/database.
+- v42: secure mobile token storage with legacy migration.
+- v43: automatic single-flight access-token refresh and one retry.
+- v44: direct recommendation contract aligned with protein constraints.
+- v45: registration UI aligned with password policy.
+- v46: Docker starts only after successful database migration.
+- v47: readiness endpoint, request IDs and migrated-container smoke testing.
+
+Current verified engineering baseline: **122 backend tests passing**, Flutter validation passing, Docker readiness smoke passing.
