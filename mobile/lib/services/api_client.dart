@@ -142,11 +142,16 @@ class WazenApi {
         headers:{'Content-Type':'application/json'},
         body:jsonEncode({'refresh_token':value}),
       );
+      if(r.statusCode==401){
+        await clearSession();
+        return false;
+      }
       final data=Map<String,dynamic>.from(_unwrap(r));
       await _saveSession(data);
       return true;
     }catch(_){
-      await clearSession();
+      // Network/server errors are not proof that the refresh token is invalid.
+      // Keep the local session so it can be retried when connectivity returns.
       return false;
     }
   }
