@@ -50,6 +50,7 @@ from app.services.source_quality import catalog_quality_report
 from app.services.auth_rate_limit import check_allowed, record_failure, clear_subject, cleanup_rate_limits, login_rate_keys, reset_rate_keys
 from app.services.security_events import log_security_event, list_security_events, clear_subject_security_events
 from app.services.observability import log_operational_event, list_operational_events, operations_summary, SLOW_REQUEST_MS
+from app.services.email_delivery import send_password_reset_email, password_reset_delivery_available
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -57,7 +58,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.7.0')
+app = FastAPI(title='WAZEN API', version='2.8.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -150,7 +151,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.7.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.8.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -285,16 +286,38 @@ def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = 
 
     user = db.scalar(select(User).where(User.email == email))
     raw = create_password_reset(db, user)
-    debug = os.getenv('WAZEN_PASSWORD_RESET_DEBUG', '').lower() in {'1','true','yes'}
-    delivery = os.getenv('WAZEN_PASSWORD_RESET_DELIVERY', 'NOT_CONFIGURED').upper()
+    delivery_available=password_reset_delivery_available()
+    provider_status='NOT_ATTEMPTED'
+    if user and raw:
+        provider_status=send_password_reset_email(user.email,raw)
+
     data = {
         'accepted': True,
-        'delivery': delivery if user else 'GENERIC',
-        'message': 'If the account exists, password reset instructions will be sent when a delivery provider is configured.',
+        'delivery': 'GENERIC',
+        'delivery_available': delivery_available,
+        'message': 'If the account exists, password reset instructions will be sent.',
     }
+
+    debug=(
+        os.getenv('WAZEN_PASSWORD_RESET_DEBUG','').lower() in {'1','true','yes'}
+        and _runtime_config.environment not in {'production','prod'}
+    )
     if debug and raw:
-        data['debug_reset_token'] = raw
-    log_security_event(db,event_type='PASSWORD_RESET_REQUEST',outcome='ACCEPTED',user_id=user.id if user else None,subject=email,client_host=client_host,request_id=request_id,details={'delivery':data['delivery']})
+        data['debug_reset_token']=raw
+
+    log_security_event(
+        db,
+        event_type='PASSWORD_RESET_REQUEST',
+        outcome='ACCEPTED',
+        user_id=user.id if user else None,
+        subject=email,
+        client_host=client_host,
+        request_id=request_id,
+        details={
+            'delivery_available':delivery_available,
+            'provider_status':provider_status,
+        },
+    )
     return envelope(data)
 
 
