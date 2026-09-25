@@ -772,27 +772,31 @@ def add_food_log_from_catalog(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/food-log/from-catalog',req.model_dump())
-    if idem['mode']=='REPLAY':
-        return idem['response']
     food = db.get(FoodItem, req.food_id)
     if not food:
         raise HTTPException(status_code=404, detail='Food item not found')
     if not food.nutrition or food.nutrition.calories is None:
         raise HTTPException(status_code=422, detail='Food nutrition unavailable')
-    row = log_catalog_food(db, user, food, req.meal_type, req.quantity, req.entry_method)
-    state = calculate_daily_state(build_daily_request(db, user)).model_dump()
-    response=envelope({
-        'log': {
-            'id': row.id, 'food_id': row.food_id, 'food_name': row.food_name,
-            'meal_type': row.meal_type, 'quantity': req.quantity, 'calories': row.calories,
-            'protein_g': row.protein_g, 'carbs_g': row.carbs_g, 'fat_g': row.fat_g, 'fiber_g': row.fiber_g, 'sodium_mg': row.sodium_mg
-        },
-        'daily_totals': today_totals(db, user.id),
-        'daily_state': state,
-    })
-    finish_idempotent(db,idem.get('record'),response)
-    return response
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/food-log/from-catalog',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        row = log_catalog_food(db, user, food, req.meal_type, req.quantity, req.entry_method)
+        state = calculate_daily_state(build_daily_request(db, user)).model_dump()
+        response=envelope({
+            'log': {
+                'id': row.id, 'food_id': row.food_id, 'food_name': row.food_name,
+                'meal_type': row.meal_type, 'quantity': req.quantity, 'calories': row.calories,
+                'protein_g': row.protein_g, 'carbs_g': row.carbs_g, 'fat_g': row.fat_g, 'fiber_g': row.fiber_g, 'sodium_mg': row.sodium_mg
+            },
+            'daily_totals': today_totals(db, user.id),
+            'daily_state': state,
+        })
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 @app.post('/api/v1/golden-flow')
@@ -866,35 +870,49 @@ def make_it_fit_options(food_id: str, db: Session = Depends(get_db)):
     })
 
 @app.post('/api/v1/food-log/from-modified-catalog')
-def add_modified_catalog_food(req: ModifiedCatalogFoodLogRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def add_modified_catalog_food(
+    req: ModifiedCatalogFoodLogRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     fit=make_it_fit(db,MakeItFitRequest(
         food_id=req.food_id,
         daily_state=build_daily_request(db,user),
         included_components=req.included_components,
     ))
     food=db.get(FoodItem,req.food_id)
-    n=fit['modified_nutrition']; q=float(req.quantity)
-    row=log_nutrition_snapshot(
-        db,user,req.food_id,
-        (food.name_en or food.name_ar or req.food_id)+(' - Modified' if fit['applied_modifications'] else ''),
-        req.meal_type,
-        calories=(n['calories'] or 0)*q,
-        protein_g=(n['protein_g'] or 0)*q,
-        carbs_g=(n['carbs_g'] or 0)*q,
-        fat_g=(n['fat_g'] or 0)*q,
-        fiber_g=(food.nutrition.fiber_g or 0)*q if food and food.nutrition else 0,
-        sodium_mg=(n['sodium_mg'] or 0)*q,
-    )
-    return envelope({
-        'log':{
-            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,
-            'meal_type':row.meal_type,'quantity':q,'calories':row.calories,
-            'protein_g':row.protein_g,'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
-        },
-        'make_it_fit':fit,
-        'daily_totals':today_totals(db,user.id),
-        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
-    })
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/food-log/from-modified-catalog',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        n=fit['modified_nutrition']; q=float(req.quantity)
+        row=log_nutrition_snapshot(
+            db,user,req.food_id,
+            (food.name_en or food.name_ar or req.food_id)+(' - Modified' if fit['applied_modifications'] else ''),
+            req.meal_type,
+            calories=(n['calories'] or 0)*q,
+            protein_g=(n['protein_g'] or 0)*q,
+            carbs_g=(n['carbs_g'] or 0)*q,
+            fat_g=(n['fat_g'] or 0)*q,
+            fiber_g=(food.nutrition.fiber_g or 0)*q if food and food.nutrition else 0,
+            sodium_mg=(n['sodium_mg'] or 0)*q,
+        )
+        response=envelope({
+            'log':{
+                'id':row.id,'food_id':row.food_id,'food_name':row.food_name,
+                'meal_type':row.meal_type,'quantity':q,'calories':row.calories,
+                'protein_g':row.protein_g,'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
+            },
+            'make_it_fit':fit,
+            'daily_totals':today_totals(db,user.id),
+            'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+        })
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 
