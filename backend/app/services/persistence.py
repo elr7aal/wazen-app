@@ -6,7 +6,7 @@ from app.models.schemas import DailyStateRequest, RecommendationRequest
 from app.services.recommendation import recommend_now
 from app.services.preferences import preference_context
 from app.services.health_limits import health_limit_rows, serialize_health_limit
-from app.services.recommendation_audit import record_exclusions
+from app.services.recommendation_audit import record_exclusions, record_decisions
 
 
 def ensure_profile(db: Session, user: User) -> UserProfile:
@@ -96,6 +96,7 @@ def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_
         'allow_modifications':allow_modifications,
     }
     result['exclusion_audit_count']=record_exclusions(db,user.id,result.get('excluded',[]),context)
+    result['decision_audit_count']=record_decisions(db,user.id,result.get('results',[]),context,engine_version='v1')
     return result
 
 
