@@ -69,6 +69,7 @@ def catalog_quality_report(db: Session, limit: int=100):
         'missing_sodium':0,
     }
     issues=[]
+    issue_count=0
 
     for food in foods:
         source=primary_source(food)
@@ -106,6 +107,8 @@ def catalog_quality_report(db: Session, limit: int=100):
             summary['missing_sodium']+=1
             flags.append('MISSING_SODIUM')
 
+        if flags:
+            issue_count+=1
         if flags and len(issues)<max(1,min(limit,500)):
             issues.append({
                 'food_id':food.id,
@@ -119,4 +122,4 @@ def catalog_quality_report(db: Session, limit: int=100):
                 'source_age_days':freshness['age_days'],
             })
 
-    return {'summary':summary,'issues':issues,'issue_count':len(issues)}
+    return {'summary':summary,'issues':issues,'issue_count':issue_count,'returned_issues':len(issues)}
