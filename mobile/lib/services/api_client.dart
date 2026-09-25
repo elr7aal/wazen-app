@@ -593,4 +593,23 @@ class WazenApi {
       .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
   }
 
+
+  Future<Map<String,dynamic>> exportMyData() async {
+    final r=await _withAuthRetry(()=>http.get(
+      Uri.parse('$baseUrl/users/me/export'),
+      headers:_headers,
+    ));
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
+  Future<void> deleteMyAccount(String password) async {
+    final r=await _withAuthRetry(()=>http.delete(
+      Uri.parse('$baseUrl/users/me'),
+      headers:_headers,
+      body:jsonEncode({'password':password,'confirm':'DELETE'}),
+    ));
+    _unwrap(r);
+    await clearSession();
+  }
+
 }
