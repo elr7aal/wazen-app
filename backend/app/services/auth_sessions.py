@@ -119,3 +119,23 @@ def consume_password_reset(db: Session, raw_token: str, new_password: str):
     revoke_all_sessions(db, user.id)
     db.commit()
     return user
+
+
+
+def list_active_sessions(db: Session, user_id: str):
+    now=utcnow()
+    rows=db.scalars(
+        select(AuthSession)
+        .where(
+            AuthSession.user_id==user_id,
+            AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at>now,
+        )
+        .order_by(AuthSession.created_at.desc())
+    ).all()
+    return [{
+        'id':x.id,
+        'created_at':x.created_at.isoformat(),
+        'expires_at':x.expires_at.isoformat(),
+        'rotated_from_id':x.rotated_from_id,
+    } for x in rows]
