@@ -100,5 +100,8 @@ These do not block local Alpha application logic, but they are not considered pr
 - v59: enumeration-safe SMTP password-reset delivery adapter.
 - v60: truthful integration capability registry and capability-aware client options.
 - v61: machine-readable Production Launch Gate plus operator launch checklist.
+- v62: capability-aware image logging UI.
+- v63: password-reset completion screen and client link routing.
+- v64: email ownership verification with one-time links, resend cooldown and production gate integration.
 
 Current verified engineering baseline: **179 backend tests passing**, Flutter validation passing, Docker migration/readiness smoke passing, PostgreSQL backup/restore drill passing.
