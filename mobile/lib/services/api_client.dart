@@ -393,7 +393,8 @@ class WazenApi {
 
 
   Future<void> sendRecommendationFeedback(String foodId,String action) async {
-    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/recommendations/feedback'),headers:_headers,body:jsonEncode({
+    final key=_newIdempotencyKey('feedback');
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/recommendations/feedback'),headers:_writeHeaders(key),body:jsonEncode({
       'food_id':foodId,'action':action,
     })));
     _unwrap(r);
@@ -423,13 +424,15 @@ class WazenApi {
   }
 
   Future<WeeklyPlan> regenerateWeeklyPlan() async {
-    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/plan/week/generate'),headers:_headers));
+    final key=_newIdempotencyKey('week-generate');
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/plan/week/generate'),headers:_writeHeaders(key)));
     return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
   Future<WeeklyPlan> rebalancePlanDay(DateTime date) async {
     final d='${date.year.toString().padLeft(4,'0')}-${date.month.toString().padLeft(2,'0')}-${date.day.toString().padLeft(2,'0')}';
-    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/plan/day/$d/rebalance'),headers:_headers));
+    final key=_newIdempotencyKey('day-rebalance');
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/plan/day/$d/rebalance'),headers:_writeHeaders(key)));
     return WeeklyPlan.fromJson(Map<String,dynamic>.from(_unwrap(r)));
   }
 
@@ -536,7 +539,8 @@ class WazenApi {
   }
 
   Future<Map<String,dynamic>> favoriteFoodLog(String logId) async {
-    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/$logId/favorite'),headers:_headers));
+    final key=_newIdempotencyKey('favorite-save');
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/$logId/favorite'),headers:_writeHeaders(key)));
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
