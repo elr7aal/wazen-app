@@ -63,6 +63,13 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 
 
 
+
+<section class="card">
+  <div class="row"><h2 class="grow">Integrations</h2><button onclick="loadIntegrations()">تحديث</button></div>
+  <div id="integrationStatus" class="row muted">لم يتم تحميل حالة التكاملات بعد.</div>
+  <div id="integrationActions" style="margin-top:10px"></div>
+</section>
+
 <section class="card">
   <div class="row"><h2 class="grow">Operations</h2><button onclick="loadOperations()">تحديث الحالة</button></div>
   <div id="opsStatus" class="row muted">لم يتم تحميل الحالة بعد.</div>
@@ -182,6 +189,32 @@ async function loadQuality(){
 }
 
 
+
+
+async function loadIntegrations(){
+  try{
+    const d=await api('/admin/integrations');
+    const c=d.capabilities||{};
+    const a=c.auth||{};
+    const statuses=[
+      ['Email/password',a.email_password],
+      ['Apple',a.apple],
+      ['Google',a.google],
+      ['Mobile OTP',a.mobile_otp],
+      ['Password reset email',c.password_reset_email],
+      ['Vision',c.vision]
+    ];
+    $('integrationStatus').innerHTML=statuses.map(([name,x])=>{
+      const status=x?(x.status||((x.available)?'AVAILABLE':'UNAVAILABLE')):'UNKNOWN';
+      return '<span class="badge">'+name+': '+status+'</span>';
+    }).join(' ');
+    $('integrationActions').innerHTML=(d.required_actions||[]).map(x=>
+      '<div class="badge">'+x.code+' • '+x.message+'</div>'
+    ).join(' ')||'<span class="badge">لا توجد إجراءات تكامل معلقة.</span>';
+  }catch(e){
+    $('integrationStatus').textContent=e.message;
+  }
+}
 
 async function loadOperations(){
   try{
