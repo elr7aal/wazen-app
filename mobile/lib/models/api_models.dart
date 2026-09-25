@@ -110,7 +110,9 @@ class FoodDetail {
   final NutritionInfo nutrition;
   final List<String> allergens;
   final String? sourceConfidence;
+  final String? sourceName;
   final String? sourceReference;
+  final DateTime? sourceVerifiedAt;
   final double? price;
   final String? currency;
 
@@ -122,7 +124,9 @@ class FoodDetail {
     required this.allergens,
     this.nameAr,
     this.sourceConfidence,
+    this.sourceName,
     this.sourceReference,
+    this.sourceVerifiedAt,
     this.price,
     this.currency,
   });
@@ -135,7 +139,9 @@ class FoodDetail {
         nutrition: NutritionInfo.fromJson((json['nutrition'] as Map<String, dynamic>?) ?? const {}),
         allergens: ((json['allergens'] as List?) ?? const []).map((e) => e.toString()).toList(),
         sourceConfidence: json['source_confidence'] as String?,
+        sourceName: json['source_name'] as String?,
         sourceReference: json['source_reference'] as String?,
+        sourceVerifiedAt: json['source_verified_at']==null?null:DateTime.tryParse(json['source_verified_at'].toString()),
         price: (json['price'] as num?)?.toDouble(),
         currency: json['currency'] as String?,
       );
