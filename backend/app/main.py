@@ -462,36 +462,47 @@ def _serialize_favorite(x: FavoriteMeal):
 @app.post('/api/v1/food-log/{log_id}/duplicate')
 def duplicate_food_log(
     log_id: str,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     source=db.get(FoodLog,log_id)
     if not source or source.user_id!=user.id:
         raise HTTPException(status_code=404,detail='Food log not found')
-    row=FoodLog(
-        user_id=user.id,
-        food_id=source.food_id,
-        food_name=source.food_name,
-        meal_type=source.meal_type,
-        entry_method='DUPLICATED',
-        calories=source.calories,
-        protein_g=source.protein_g,
-        carbs_g=source.carbs_g,
-        fat_g=source.fat_g,
-        fiber_g=source.fiber_g,
-        sodium_mg=source.sodium_mg,
-    )
-    db.add(row);db.commit();db.refresh(row)
-    return envelope({
-        'item':{
-            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
-            'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
-            'carbs_g':row.carbs_g,'fat_g':row.fat_g,'fiber_g':row.fiber_g,'sodium_mg':row.sodium_mg,
-            'logged_at':row.logged_at.isoformat(),
-        },
-        'totals':today_totals(db,user.id),
-        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
-    })
+    path=f'/api/v1/food-log/{log_id}/duplicate'
+    idem=_begin_write_idempotency(db,user,idempotency_key,path,{'log_id':log_id})
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        row=FoodLog(
+            user_id=user.id,
+            food_id=source.food_id,
+            food_name=source.food_name,
+            meal_type=source.meal_type,
+            entry_method='DUPLICATED',
+            calories=source.calories,
+            protein_g=source.protein_g,
+            carbs_g=source.carbs_g,
+            fat_g=source.fat_g,
+            fiber_g=source.fiber_g,
+            sodium_mg=source.sodium_mg,
+        )
+        db.add(row);db.commit();db.refresh(row)
+        response=envelope({
+            'item':{
+                'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
+                'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
+                'carbs_g':row.carbs_g,'fat_g':row.fat_g,'fiber_g':row.fiber_g,'sodium_mg':row.sodium_mg,
+                'logged_at':row.logged_at.isoformat(),
+            },
+            'totals':today_totals(db,user.id),
+            'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+        })
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 @app.post('/api/v1/food-log/{log_id}/favorite')
@@ -542,36 +553,47 @@ def favorite_meals(
 def log_favorite_meal(
     favorite_id: str,
     req: FavoriteLogRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     fav=db.get(FavoriteMeal,favorite_id)
     if not fav or fav.user_id!=user.id:
         raise HTTPException(status_code=404,detail='Favorite meal not found')
-    row=FoodLog(
-        user_id=user.id,
-        food_id=fav.food_id,
-        food_name=fav.food_name,
-        meal_type=req.meal_type or fav.default_meal_type,
-        entry_method='FAVORITE',
-        calories=fav.calories,
-        protein_g=fav.protein_g,
-        carbs_g=fav.carbs_g,
-        fat_g=fav.fat_g,
-        fiber_g=fav.fiber_g,
-        sodium_mg=fav.sodium_mg,
-    )
-    db.add(row);db.commit();db.refresh(row)
-    return envelope({
-        'item':{
-            'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
-            'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
-            'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
-            'logged_at':row.logged_at.isoformat(),
-        },
-        'totals':today_totals(db,user.id),
-        'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
-    })
+    path=f'/api/v1/food-log/favorites/{favorite_id}/log'
+    idem=_begin_write_idempotency(db,user,idempotency_key,path,req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        row=FoodLog(
+            user_id=user.id,
+            food_id=fav.food_id,
+            food_name=fav.food_name,
+            meal_type=req.meal_type or fav.default_meal_type,
+            entry_method='FAVORITE',
+            calories=fav.calories,
+            protein_g=fav.protein_g,
+            carbs_g=fav.carbs_g,
+            fat_g=fav.fat_g,
+            fiber_g=fav.fiber_g,
+            sodium_mg=fav.sodium_mg,
+        )
+        db.add(row);db.commit();db.refresh(row)
+        response=envelope({
+            'item':{
+                'id':row.id,'food_id':row.food_id,'food_name':row.food_name,'meal_type':row.meal_type,
+                'entry_method':row.entry_method,'calories':row.calories,'protein_g':row.protein_g,
+                'carbs_g':row.carbs_g,'fat_g':row.fat_g,'sodium_mg':row.sodium_mg,
+                'logged_at':row.logged_at.isoformat(),
+            },
+            'totals':today_totals(db,user.id),
+            'daily_state':calculate_daily_state(build_daily_request(db,user)).model_dump(),
+        })
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 @app.post('/api/v1/activity-log')
