@@ -209,3 +209,79 @@ Unified Add Food flow:
 - LOVE/LIKE/DISLIKE adjust preference scoring but never override severe-allergy exclusions.
 - Account UI supports five-level preference controls and synchronizes legacy like/dislike signals.
 - Backend v21 baseline: **62 passing tests**.
+
+## v22 — Health & Safety Limits
+- Explicit user/clinician nutrition limits with MAX/MIN and SOFT/HARD behavior.
+- HARD limits are applied before ranking and also respected by weekly plans.
+- Missing nutrition required by a HARD limit is treated as unknown/unsafe for that rule, never as zero.
+- Mobile Health Limits management screen linked from Account/Safety.
+- Backend v22 baseline: **66 passing tests**.
+
+## v23 — Food Catalog Search
+- Arabic/English synonym search, including برغر / برجر / burger families.
+- Filters for vendor, brand, category, food type, calories, protein, sodium, fiber and price.
+- Mobile search supports All / Restaurants / Grocery plus nutrition and price filters.
+
+## v24 — Food Log Favorites
+- Duplicate any logged meal.
+- Save a log as a reusable favorite.
+- Re-log favorites with one tap.
+- Daily totals recalculate immediately after these operations.
+
+## v25 — Structured Natural-language Logging
+- Arabic/English multi-item text parsing.
+- Conservative portion and unit estimates.
+- Per-item candidate lists and confidence.
+- preview_required=true and auto_saved=false by contract; text parsing never saves without user confirmation.
+
+## v26 — Image Review Contract
+- Image analysis remains review-only.
+- AI-estimated food/portion data is never auto-saved.
+- Low/unknown confidence remains visible to the user.
+
+## v27 — Daily Nutrition + Activity
+- Fiber target/consumption/remaining added to the daily engine.
+- Manual Activity Credit support with persisted activity logs.
+- Fiber is preserved across modified meals, favorites and goal history.
+
+## v28 — Structured Craving Parser
+- Arabic/English parsing for restaurant, category, calorie, protein and budget constraints.
+- Currency context is required before numbers are interpreted as budget.
+- Parsed constraints are shown to the user before recommendation results.
+
+## v29 — Candidate Filtering Audit
+- Severe allergy, explicit NEVER_SHOW, hard health limits, unavailable foods and insufficient nutrition are filtered before ranking.
+- Exclusion reasons are persisted with request context.
+- Added GET /api/v1/recommendations/exclusions.
+- Fixed recommendation argument mapping so budget cannot be misread as a protein constraint.
+
+## v30 — Ranking Engine v1 Audit
+- Ranked recommendation decisions are persisted with rank, component scores, reasons, warnings and request context.
+- Added GET /api/v1/recommendations/decisions.
+- Ranking tests enforce 0–100 score bounds, stable decision priority and preservation of an explicitly requested vendor.
+
+## v31 — Make It Fit Hardening
+- Duplicate modifier components are de-duplicated before nutrition math.
+- Core requested food is explicitly preserved.
+- Before/after nutrition and nutrition delta are returned.
+- Only verified, explicitly selected components are applied.
+
+## v32 — Rebalance Day Hardening
+- User choice is explicitly preserved after logging, including when the day goes over the current calorie target.
+- Post-overage recommendations use a lighter follow-up ceiling rather than blocking the chosen meal.
+- Neutral Arabic copy avoids guilt/shaming language.
+
+## v33 — Recommendation Card Completeness
+- Recommendation cards show price when known.
+- Health/safety/budget warnings are visible instead of hidden.
+- Source confidence remains visible on every card.
+
+## v34 — Food Detail Provenance
+- Food detail now includes source name, confidence, reference and last verification date.
+- Missing nutrition values remain visibly unavailable (—) and are never presented as low/zero.
+
+## v35 — Admin Data Review Completion
+- Admin can edit catalog/nutrition/allergen data with full before/after audit snapshots.
+- Duplicate foods can be merged into a canonical record while preserving the source as MERGED.
+- Food-log, favorites, weekly-plan and recommendation references are remapped during merge.
+- Admin UI now exposes Edit and Merge actions in addition to review/import.
