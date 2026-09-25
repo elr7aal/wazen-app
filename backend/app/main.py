@@ -50,7 +50,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.0.0')
+app = FastAPI(title='WAZEN API', version='2.1.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,7 +96,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.0.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.1.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -508,34 +508,47 @@ def duplicate_food_log(
 @app.post('/api/v1/food-log/{log_id}/favorite')
 def favorite_food_log(
     log_id: str,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     source=db.get(FoodLog,log_id)
     if not source or source.user_id!=user.id:
         raise HTTPException(status_code=404,detail='Food log not found')
-    existing=db.scalar(select(FavoriteMeal).where(
-        FavoriteMeal.user_id==user.id,
-        FavoriteMeal.food_name==source.food_name,
-        FavoriteMeal.calories==source.calories,
-        FavoriteMeal.protein_g==source.protein_g,
-    ))
-    if existing:
-        return envelope({'favorite':_serialize_favorite(existing),'created':False})
-    fav=FavoriteMeal(
-        user_id=user.id,
-        food_id=source.food_id,
-        food_name=source.food_name,
-        default_meal_type=source.meal_type,
-        calories=source.calories,
-        protein_g=source.protein_g,
-        carbs_g=source.carbs_g,
-        fat_g=source.fat_g,
-        sodium_mg=source.sodium_mg,
-        source_log_id=source.id,
-    )
-    db.add(fav);db.commit();db.refresh(fav)
-    return envelope({'favorite':_serialize_favorite(fav),'created':True})
+    path=f'/api/v1/food-log/{log_id}/favorite'
+    idem=_begin_write_idempotency(db,user,idempotency_key,path,{'log_id':log_id})
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        existing=db.scalar(select(FavoriteMeal).where(
+            FavoriteMeal.user_id==user.id,
+            FavoriteMeal.food_name==source.food_name,
+            FavoriteMeal.calories==source.calories,
+            FavoriteMeal.protein_g==source.protein_g,
+        ))
+        if existing:
+            response=envelope({'favorite':_serialize_favorite(existing),'created':False})
+        else:
+            fav=FavoriteMeal(
+                user_id=user.id,
+                food_id=source.food_id,
+                food_name=source.food_name,
+                default_meal_type=source.meal_type,
+                calories=source.calories,
+                protein_g=source.protein_g,
+                carbs_g=source.carbs_g,
+                fat_g=source.fat_g,
+                fiber_g=source.fiber_g,
+                sodium_mg=source.sodium_mg,
+                source_log_id=source.id,
+            )
+            db.add(fav);db.commit();db.refresh(fav)
+            response=envelope({'favorite':_serialize_favorite(fav),'created':True})
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 
 @app.get('/api/v1/food-log/favorites')
@@ -778,12 +791,26 @@ def recommendation_decisions(
 
 
 @app.post('/api/v1/recommendations/feedback')
-def recommendation_feedback(req: RecommendationFeedbackRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def recommendation_feedback(
+    req: RecommendationFeedbackRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     if not db.get(FoodItem, req.food_id):
         raise HTTPException(status_code=404, detail='Food item not found')
-    row=RecommendationFeedback(user_id=user.id, food_id=req.food_id, action=req.action)
-    db.add(row); db.commit(); db.refresh(row)
-    return envelope({'saved':True,'food_id':req.food_id,'action':req.action})
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/recommendations/feedback',req.model_dump())
+    if idem['mode']=='REPLAY':
+        return idem['response']
+    try:
+        row=RecommendationFeedback(user_id=user.id, food_id=req.food_id, action=req.action)
+        db.add(row); db.commit(); db.refresh(row)
+        response=envelope({'saved':True,'food_id':req.food_id,'action':req.action})
+        finish_idempotent(db,idem.get('record'),response)
+        return response
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
+        raise
 
 @app.post('/api/v1/recommendations/make-it-fit')
 def make_fit(req: MakeItFitRequest, db: Session = Depends(get_db)):
@@ -1271,32 +1298,54 @@ def weekly_plan(
 @app.post('/api/v1/plan/week/generate')
 def regenerate_weekly_plan(
     start_date: Optional[date] = None,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    payload={'start_date':start_date.isoformat() if start_date else None}
+    idem=_begin_write_idempotency(db,user,idempotency_key,'/api/v1/plan/week/generate',payload)
+    if idem['mode']=='REPLAY':
+        return idem['response']
     try:
-        return envelope(generate_week(db, user, start_date or week_start_for(), replace=True))
+        response=envelope(generate_week(db, user, start_date or week_start_for(), replace=True))
+        finish_idempotent(db,idem.get('record'),response)
+        return response
     except ValueError as exc:
+        abandon_idempotent(db,idem.get('record'))
         if str(exc) == 'PROFILE_REQUIRED':
             raise HTTPException(status_code=422, detail='Complete profile required')
         if str(exc) == 'NO_ELIGIBLE_FOODS':
             raise HTTPException(status_code=422, detail='No eligible foods available for this profile')
+        raise
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
         raise
 
 
 @app.post('/api/v1/plan/day/{plan_date}/rebalance')
 def rebalance_weekly_plan_day(
     plan_date: date,
+    idempotency_key: Optional[str] = Header(default=None, alias='Idempotency-Key'),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    path=f'/api/v1/plan/day/{plan_date.isoformat()}/rebalance'
+    idem=_begin_write_idempotency(db,user,idempotency_key,path,{'plan_date':plan_date.isoformat()})
+    if idem['mode']=='REPLAY':
+        return idem['response']
     try:
-        return envelope(rebalance_plan_day(db, user, plan_date))
+        response=envelope(rebalance_plan_day(db, user, plan_date))
+        finish_idempotent(db,idem.get('record'),response)
+        return response
     except ValueError as exc:
+        abandon_idempotent(db,idem.get('record'))
         if str(exc) == 'PROFILE_REQUIRED':
             raise HTTPException(status_code=422, detail='Complete profile required')
         if str(exc) == 'NO_ELIGIBLE_FOODS':
             raise HTTPException(status_code=422, detail='No eligible foods available for this profile')
+        raise
+    except Exception:
+        abandon_idempotent(db,idem.get('record'))
         raise
 
 
