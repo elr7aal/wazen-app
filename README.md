@@ -466,3 +466,13 @@ Unified Add Food flow:
 - Admin console includes an Integration Readiness section.
 - Backend v60 baseline: **173 passing tests**.
 - Docker migration/readiness smoke and PostgreSQL backup/restore drill: **passing**.
+
+
+## v61 — Production Launch Gate
+- Added restricted `GET /api/v1/admin/launch-readiness` with a single machine-readable READY / NOT_READY production decision.
+- Launch blockers cover production environment mode, readiness, PostgreSQL, explicit CORS, strong JWT/admin secrets and configured HTTPS password-reset delivery.
+- Vision and unimplemented Apple/Google/mobile-OTP authentication are surfaced as warnings rather than hidden or falsely represented as available.
+- Manual launch checks cover managed-provider backups, real reset-email delivery, final domain/TLS/CORS verification and native iOS signing.
+- Admin console includes a Production Launch Gate dashboard.
+- Added `docs/PRODUCTION_LAUNCH_CHECKLIST.md`.
+- Backend v61 baseline: **179 passing tests**.
