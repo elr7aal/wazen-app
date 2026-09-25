@@ -8,6 +8,7 @@ import 'craving_screen.dart';
 import 'auth_screen.dart';
 import 'plan_screen.dart';
 import 'health_limits_screen.dart';
+import 'privacy_data_screen.dart';
 
 class ProfileScreen extends StatefulWidget{
   const ProfileScreen({super.key});
@@ -235,6 +236,12 @@ class _ProfileScreenState extends State<ProfileScreen>{
             Expanded(child:Text('الجلسات النشطة: ${activeSessions.length}',style:const TextStyle(fontWeight:FontWeight.w800))),
           ]),
           const SizedBox(height:10),
+          OutlinedButton.icon(
+            onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const PrivacyDataScreen())),
+            icon:const Icon(Icons.privacy_tip_outlined),
+            label:const Text('الخصوصية والبيانات'),
+          ),
+          const SizedBox(height:8),
           OutlinedButton.icon(
             onPressed:activeSessions.isEmpty?null:()async{
               final ok=await showDialog<bool>(
