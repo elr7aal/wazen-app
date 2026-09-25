@@ -414,3 +414,13 @@ Unified Add Food flow:
 - Added Alembic revision `0003_auth_rate_limits`.
 - Backend v55 baseline: **152 passing tests**.
 - Docker migration/readiness smoke: **passing**.
+
+
+## v56 — Security Event Audit
+- Privacy-preserving security event ledger with HMAC-hashed email/IP subjects; raw email addresses and IPs are never persisted in security events.
+- Authentication audit covers login success/failure, login throttling, token refresh success/failure, logout/logout-all, password-reset requests, reset success/failure and reset throttling.
+- Security events carry bounded request IDs for cross-request tracing without storing request bodies or credentials.
+- Admin API supports filtering by event type/outcome, and the Admin console includes a Security Events viewer.
+- Permanent account deletion removes both user-linked security events and hashed email-subject events.
+- Added Alembic revision `0004_security_events` and migration-head coverage.
+- Backend v56 baseline: **159 passing tests**.
