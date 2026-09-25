@@ -22,6 +22,9 @@ def upgrade() -> None:
             batch.add_column(sa.Column('email_verified',sa.Boolean(),nullable=False,server_default=sa.false()))
         if 'email_verified_at' not in columns:
             batch.add_column(sa.Column('email_verified_at',sa.DateTime(),nullable=True))
+    # Existing pre-v64 accounts are grandfathered as verified so the upgrade does not lock out Alpha users.
+    bind.execute(sa.text("UPDATE users SET email_verified = 1 WHERE email_verified = 0"))
+
     inspector=sa.inspect(bind)
     indexes={i['name'] for i in inspector.get_indexes('users')}
     if 'ix_users_email_verified' not in indexes:
