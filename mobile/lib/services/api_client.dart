@@ -496,4 +496,12 @@ class WazenApi {
     return DailyState.fromJson(Map<String,dynamic>.from(data['daily_state'] as Map));
   }
 
+
+  Future<List<Map<String,dynamic>>> activeSessions() async {
+    final r=await http.get(Uri.parse('$baseUrl/auth/sessions'),headers:_headers);
+    final data=Map<String,dynamic>.from(_unwrap(r));
+    return ((data['items'] as List?)??const [])
+      .map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+
 }
