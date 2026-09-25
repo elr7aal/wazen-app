@@ -340,3 +340,12 @@ Unified Add Food flow:
 - Docker smoke test now validates readiness rather than liveness only.
 - Current backend baseline: **122 passing tests**.
 - Latest Flutter web validation: **passing**.
+
+
+## v48 — Idempotent Mobile Writes
+- Added persisted Idempotency-Key support for retry-sensitive food-log writes.
+- Same key + same payload replays the original response without creating a duplicate log.
+- Same key + different payload returns HTTP 409.
+- Covered manual food logging, catalog logging, modified-catalog logging, duplicate meal logging and favorite re-logging.
+- Flutter generates one idempotency key per user action and preserves it across automatic auth-refresh retries.
+- Added Alembic revision `0002_idempotency` and migration-head coverage.
