@@ -4,10 +4,14 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models.db_models import FoodItem, FoodNutrition, FoodReview, AdminAuditLog
+from app.models.db_models import (
+    FoodItem, FoodNutrition, FoodReview, AdminAuditLog, FoodAllergen, FoodDataSource,
+    FoodLog, RecommendationFeedback, WeeklyPlanItem, FavoriteMeal,
+    RecommendationExclusionLog, RecommendationDecisionLog,
+)
 
 
 REVIEW_ACTIONS = {'APPROVE', 'REJECT', 'FLAG'}
@@ -220,3 +224,183 @@ def import_foods(db: Session, rows: list[dict[str, Any]], dry_run: bool, actor: 
     audit(db, 'FOOD_IMPORT_DRY_RUN' if dry_run else 'FOOD_IMPORT', 'BATCH', None, actor, summary)
     db.commit()
     return summary, checked
+
+
+
+def _food_snapshot(food: FoodItem) -> dict[str, Any]:
+    n=food.nutrition
+    return {
+        'id':food.id,
+        'name_en':food.name_en,
+        'name_ar':food.name_ar,
+        'food_type':food.food_type,
+        'brand_name':food.brand_name,
+        'vendor_name':food.vendor_name,
+        'category':food.category,
+        'serving_size':food.serving_size,
+        'serving_unit':food.serving_unit,
+        'barcode':food.barcode,
+        'price':food.price,
+        'currency':food.currency,
+        'availability_status':food.availability_status,
+        'status':food.status,
+        'nutrition':{
+            'calories':n.calories if n else None,
+            'protein_g':n.protein_g if n else None,
+            'carbs_g':n.carbs_g if n else None,
+            'fat_g':n.fat_g if n else None,
+            'fiber_g':n.fiber_g if n else None,
+            'sugar_g':n.sugar_g if n else None,
+            'sodium_mg':n.sodium_mg if n else None,
+        },
+        'allergens':[
+            {'code':x.allergen_code,'relationship_type':x.relationship_type}
+            for x in food.allergens
+        ],
+    }
+
+
+def edit_food(db: Session, food_id: str, changes: dict[str, Any], actor: str):
+    food=db.get(FoodItem,food_id)
+    if not food:
+        raise ValueError('FOOD_NOT_FOUND')
+    before=_food_snapshot(food)
+
+    top_fields={
+        'name_en','name_ar','food_type','brand_name','vendor_name','category',
+        'serving_size','serving_unit','barcode','price','currency',
+        'availability_status','status',
+    }
+    for key,value in changes.items():
+        if key in top_fields:
+            setattr(food,key,value)
+
+    nutrition_changes=changes.get('nutrition')
+    if nutrition_changes is not None:
+        nutrition=food.nutrition
+        if nutrition is None:
+            nutrition=FoodNutrition(food_id=food.id)
+            db.add(nutrition)
+        allowed_nutrition={
+            'calories','protein_g','carbs_g','fat_g','saturated_fat_g',
+            'fiber_g','sugar_g','added_sugar_g','sodium_mg','cholesterol_mg',
+        }
+        for key,value in nutrition_changes.items():
+            if key in allowed_nutrition:
+                setattr(nutrition,key,value)
+
+    allergens=changes.get('allergens')
+    if allergens is not None:
+        for row in list(food.allergens):
+            db.delete(row)
+        db.flush()
+        seen=set()
+        for item in allergens:
+            code=str(item.get('code') or '').upper().strip()
+            relationship=str(item.get('relationship_type') or 'CONTAINS').upper().strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            db.add(FoodAllergen(
+                food_id=food.id,
+                allergen_code=code,
+                relationship_type=relationship,
+            ))
+
+    db.flush()
+    db.refresh(food)
+    after=_food_snapshot(food)
+    audit(db,'FOOD_EDIT','FOOD',food.id,actor,{'before':before,'after':after})
+    db.commit()
+    return after
+
+
+def merge_foods(db: Session, source_id: str, target_id: str, actor: str):
+    if source_id==target_id:
+        raise ValueError('SAME_FOOD')
+    source=db.get(FoodItem,source_id)
+    target=db.get(FoodItem,target_id)
+    if not source or not target:
+        raise ValueError('FOOD_NOT_FOUND')
+    before_source=_food_snapshot(source)
+    before_target=_food_snapshot(target)
+
+    for field in [
+        'name_en','name_ar','brand_name','vendor_name','category',
+        'serving_size','serving_unit','price',
+    ]:
+        if getattr(target,field) in (None,'') and getattr(source,field) not in (None,''):
+            setattr(target,field,getattr(source,field))
+
+    if target.nutrition is None and source.nutrition is not None:
+        target.nutrition=FoodNutrition(food_id=target.id)
+        db.add(target.nutrition)
+    if target.nutrition is not None and source.nutrition is not None:
+        for field in [
+            'calories','protein_g','carbs_g','fat_g','saturated_fat_g',
+            'fiber_g','sugar_g','added_sugar_g','sodium_mg','cholesterol_mg',
+        ]:
+            if getattr(target.nutrition,field) is None and getattr(source.nutrition,field) is not None:
+                setattr(target.nutrition,field,getattr(source.nutrition,field))
+
+    target_allergens={x.allergen_code for x in target.allergens}
+    for item in source.allergens:
+        if item.allergen_code not in target_allergens:
+            db.add(FoodAllergen(
+                food_id=target.id,
+                allergen_code=item.allergen_code,
+                relationship_type=item.relationship_type,
+            ))
+            target_allergens.add(item.allergen_code)
+
+    existing_sources={
+        (x.source_type,x.source_name,x.source_reference)
+        for x in target.sources
+    }
+    for item in source.sources:
+        key=(item.source_type,item.source_name,item.source_reference)
+        if key not in existing_sources:
+            db.add(FoodDataSource(
+                food_id=target.id,
+                source_type=item.source_type,
+                source_name=item.source_name,
+                source_reference=item.source_reference,
+                source_market=item.source_market,
+                confidence_level=item.confidence_level,
+                verified_at=item.verified_at,
+            ))
+            existing_sources.add(key)
+
+    for model in [
+        FoodLog, RecommendationFeedback, WeeklyPlanItem, FavoriteMeal,
+        RecommendationExclusionLog, RecommendationDecisionLog,
+    ]:
+        db.execute(
+            update(model)
+            .where(model.food_id==source_id)
+            .values(food_id=target_id)
+        )
+
+    source.status='MERGED'
+    source.availability_status='UNAVAILABLE'
+    source.barcode=None
+
+    db.flush()
+    db.refresh(target)
+    db.refresh(source)
+    details={
+        'source_id':source_id,
+        'target_id':target_id,
+        'before_source':before_source,
+        'before_target':before_target,
+        'after_source':_food_snapshot(source),
+        'after_target':_food_snapshot(target),
+    }
+    audit(db,'FOOD_MERGE','FOOD',target_id,actor,details)
+    db.commit()
+    return {
+        'source_id':source_id,
+        'target_id':target_id,
+        'source_status':source.status,
+        'target':_food_snapshot(target),
+    }
