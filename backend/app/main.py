@@ -52,6 +52,7 @@ from app.services.security_events import log_security_event, list_security_event
 from app.services.observability import log_operational_event, list_operational_events, operations_summary, SLOW_REQUEST_MS
 from app.services.email_delivery import send_password_reset_email, password_reset_delivery_available
 from app.services.integration_capabilities import integration_capabilities, integration_admin_summary
+from app.services.launch_readiness import production_launch_gate
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -59,7 +60,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.9.0')
+app = FastAPI(title='WAZEN API', version='2.10.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -152,7 +153,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.9.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.10.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -1480,6 +1481,15 @@ def admin_integrations(
     actor: str = Depends(require_admin),
 ):
     return envelope(integration_admin_summary(_runtime_config))
+
+
+@app.get('/api/v1/admin/launch-readiness')
+def admin_launch_readiness(
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    readiness=readiness_status(db,_runtime_config)
+    return envelope(production_launch_gate(_runtime_config,readiness))
 
 
 @app.get('/api/v1/admin/audit')
