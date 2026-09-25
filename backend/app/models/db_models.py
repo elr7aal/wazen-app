@@ -321,3 +321,20 @@ class RecommendationDecisionLog(Base):
     context_json: Mapped[str] = mapped_column(Text, default='{}')
     engine_version: Mapped[str] = mapped_column(String(20), default='v1')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = 'idempotency_records'
+    __table_args__ = (
+        UniqueConstraint('user_id','method','path','idempotency_key',name='uq_idempotency_scope'),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    method: Mapped[str] = mapped_column(String(12))
+    path: Mapped[str] = mapped_column(String(255))
+    idempotency_key: Mapped[str] = mapped_column(String(120), index=True)
+    request_hash: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(20), default='PENDING', index=True)
+    response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
