@@ -29,7 +29,7 @@ from app.services.catalog import ensure_catalog_seeded, query_foods, serialize_f
 from app.services.vision import analyze_food_image
 from app.services.onboarding import calculate_targets
 from app.services.profile_insights import profile_insights
-from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods
+from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods, edit_food, merge_foods
 from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
 from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset
 from app.services.goal_history import add_goal_snapshot, list_goal_history
@@ -45,7 +45,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.6.0')
+app = FastAPI(title='WAZEN API', version='1.7.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,7 +63,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.6.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.7.0'})
 
 
 # -------- Authentication --------
@@ -980,6 +980,15 @@ class AdminImportRequest(BaseModel):
     csv_text: Optional[str] = None
 
 
+class AdminFoodEditRequest(BaseModel):
+    changes: dict[str, Any]
+
+
+class AdminFoodMergeRequest(BaseModel):
+    source_id: str
+    target_id: str
+
+
 def require_admin(
     x_wazen_admin_key: Optional[str] = Header(default=None),
     x_wazen_admin_actor: Optional[str] = Header(default=None),
@@ -1025,6 +1034,39 @@ def admin_review_food(
         'reviewed_at': review.reviewed_at.isoformat() if review.reviewed_at else None,
     })
 
+
+
+@app.patch('/api/v1/admin/foods/{food_id}')
+def admin_edit_food(
+    food_id: str,
+    req: AdminFoodEditRequest,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        item=edit_food(db,food_id,req.changes,actor)
+    except ValueError as exc:
+        if str(exc)=='FOOD_NOT_FOUND':
+            raise HTTPException(status_code=404,detail='Food item not found')
+        raise
+    return envelope(item)
+
+
+@app.post('/api/v1/admin/foods/merge')
+def admin_merge_foods(
+    req: AdminFoodMergeRequest,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        data=merge_foods(db,req.source_id,req.target_id,actor)
+    except ValueError as exc:
+        if str(exc)=='FOOD_NOT_FOUND':
+            raise HTTPException(status_code=404,detail='Food item not found')
+        if str(exc)=='SAME_FOOD':
+            raise HTTPException(status_code=422,detail='Source and target must differ')
+        raise
+    return envelope(data)
 
 @app.post('/api/v1/admin/import/foods')
 def admin_import_foods(
