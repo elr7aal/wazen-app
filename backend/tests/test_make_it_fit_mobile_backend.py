@@ -41,3 +41,53 @@ def test_no_selected_components_keeps_base():
     })
     assert r.status_code==200
     assert r.json()['data']['log']['calories']==613
+
+
+def test_duplicate_component_is_applied_only_once():
+    h=reg('mif-dedupe@example.com')
+    r=client.post('/api/v1/recommendations/make-it-fit',headers=h,json={
+        'food_id':'KFC-AE-014',
+        'daily_state':{
+            'target_calories':2000,
+            'consumed_calories':0,
+            'target_protein_g':140,
+            'consumed_protein_g':0,
+            'target_carbs_g':250,
+            'consumed_carbs_g':0,
+            'target_fat_g':70,
+            'consumed_fat_g':0,
+            'sodium_max_mg':2300,
+            'consumed_sodium_mg':0,
+        },
+        'included_components':['REGULAR_PEPSI_453ML','REGULAR_PEPSI_453ML'],
+    })
+    assert r.status_code==200, r.text
+    data=r.json()['data']
+    assert len(data['applied_modifications'])==1
+    assert data['calories_saved']==197.3
+
+
+def test_make_it_fit_preserves_core_food_and_returns_delta():
+    h=reg('mif-core@example.com')
+    r=client.post('/api/v1/recommendations/make-it-fit',headers=h,json={
+        'food_id':'KFC-AE-014',
+        'daily_state':{
+            'target_calories':2000,
+            'consumed_calories':0,
+            'target_protein_g':140,
+            'consumed_protein_g':0,
+            'target_carbs_g':250,
+            'consumed_carbs_g':0,
+            'target_fat_g':70,
+            'consumed_fat_g':0,
+            'sodium_max_mg':2300,
+            'consumed_sodium_mg':0,
+        },
+        'included_components':['REGULAR_PEPSI_453ML'],
+    })
+    assert r.status_code==200
+    data=r.json()['data']
+    assert data['food_id']=='KFC-AE-014'
+    assert data['core_food_unchanged'] is True
+    assert data['nutrition_delta']['calories']==-197.3
+    assert data['modified_nutrition']['calories']==415.7
