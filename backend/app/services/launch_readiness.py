@@ -37,6 +37,14 @@ def production_launch_gate(config: RuntimeConfig, readiness: dict) -> dict:
     if len(admin_key)<32:
         blocker('STRONG_ADMIN_KEY_REQUIRED','security','WAZEN_ADMIN_KEY must be configured with at least 32 characters for production admin APIs.')
 
+    if not caps['email_verification']['available']:
+        blocker('EMAIL_VERIFICATION_REQUIRED','authentication','Email verification delivery must be configured before production launch.')
+    else:
+        verify_base=(os.getenv('WAZEN_EMAIL_VERIFY_URL_BASE') or '').strip()
+        parsed_verify=urlparse(verify_base)
+        if parsed_verify.scheme.lower()!='https' or not parsed_verify.netloc:
+            blocker('HTTPS_VERIFY_URL_REQUIRED','authentication','WAZEN_EMAIL_VERIFY_URL_BASE must be an absolute HTTPS URL in production.')
+
     if not caps['password_reset_email']['available']:
         blocker('PASSWORD_RESET_EMAIL_REQUIRED','authentication','Password reset email delivery must be configured before production launch.')
     else:
@@ -65,7 +73,7 @@ def production_launch_gate(config: RuntimeConfig, readiness: dict) -> dict:
         {
             'code':'VERIFY_REAL_EMAIL_DELIVERY',
             'area':'authentication',
-            'message':'Complete a real password-reset delivery test against the production/staging mailbox and reset URL.',
+            'message':'Complete real email-verification and password-reset delivery tests against the production/staging mailbox and client URLs.',
         },
         {
             'code':'VERIFY_DOMAIN_TLS',
