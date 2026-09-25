@@ -4,6 +4,7 @@ from app.models.schemas import RecommendationRequest
 from app.services.catalog import query_foods
 from app.services.daily_state import calculate_daily_state
 from app.services.health_limits import evaluate_food_health_limits
+from app.services.source_quality import primary_source, source_freshness
 
 
 def _norm(v: str | None) -> str | None:
@@ -120,11 +121,19 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
         if protein>=daily.protein_gap_g and daily.protein_gap_g>0: reasons.append('Covers the remaining protein gap')
         elif daily.protein_gap_g>0: reasons.append('Contributes to the remaining protein target')
 
-        source=item.sources[0] if item.sources else None
+        source=primary_source(item)
+        freshness=source_freshness(source)
+        if freshness['status']=='STALE':
+            warnings.append('SOURCE_STALE')
+        elif freshness['status']=='UNKNOWN':
+            warnings.append('SOURCE_VERIFICATION_UNKNOWN')
+        elif freshness['status']=='AGING':
+            warnings.append('SOURCE_AGING')
         results.append({
             'food_id':item.id,'vendor':item.vendor_name,'name':item.name_en or item.name_ar,'name_ar':item.name_ar,'category':item.category,
             'nutrition':{'calories':n.calories,'protein_g':n.protein_g,'carbs_g':n.carbs_g,'fat_g':n.fat_g,'sodium_mg':n.sodium_mg},
             'price':item.price,'currency':item.currency,'source_confidence':source.confidence_level if source else None,
+            'source_freshness':freshness['status'],'source_age_days':freshness['age_days'],
             'scores':{'nutrition':round(nutrition_score,1),'health':round(health_score,1),'preference':round(preference_score,1),'wazen':round(score,1)},
             'decision':decision,'reasons':reasons,'warnings':warnings,'can_modify':req.allow_modifications and decision in {'NEAR_MATCH','MAKE_IT_FIT'}
         })
