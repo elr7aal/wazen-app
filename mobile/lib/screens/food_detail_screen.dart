@@ -110,6 +110,14 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
               Text('الثقة: ${detail!.sourceConfidence??'غير محددة'}',style:const TextStyle(color:Colors.black54)),
               const SizedBox(height:4),
               Text(
+                _freshnessText(detail!.sourceFreshness,detail!.sourceAgeDays),
+                style:TextStyle(
+                  color:detail!.sourceFreshness=='STALE'?Colors.orange.shade800:Colors.black54,
+                  fontWeight:detail!.sourceFreshness=='STALE'?FontWeight.w700:FontWeight.normal,
+                ),
+              ),
+              const SizedBox(height:4),
+              Text(
                 detail!.sourceVerifiedAt==null
                   ?'آخر تحقق: غير متوفر'
                   :'آخر تحقق: ${detail!.sourceVerifiedAt!.year}-${detail!.sourceVerifiedAt!.month.toString().padLeft(2,'0')}-${detail!.sourceVerifiedAt!.day.toString().padLeft(2,'0')}',
@@ -157,6 +165,15 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
   }
 
   Widget _stat(String label, String value) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF6F7F3), borderRadius: BorderRadius.circular(14)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)), const SizedBox(height: 2), Text(value, style: const TextStyle(fontWeight: FontWeight.w800))]));
+
+  String _freshnessText(String? status,int? age){
+    switch(status){
+      case 'FRESH': return age==null?'حداثة المصدر: حديث':'حداثة المصدر: تحقق قبل $age يوم';
+      case 'AGING': return age==null?'حداثة المصدر: يحتاج تحديث قريب':'حداثة المصدر: تحقق قبل $age يوم';
+      case 'STALE': return age==null?'حداثة المصدر: قديم':'حداثة المصدر: قديم ($age يوم)';
+      default: return 'حداثة المصدر: تاريخ التحقق غير متوفر';
+    }
+  }
 
   String _decision(String d) => switch (d) {'ELIGIBLE' => 'مناسب الآن', 'NEAR_MATCH' => 'قريب من الخطة', 'MAKE_IT_FIT' => 'نقدر نوازنه', _ => d};
 }
