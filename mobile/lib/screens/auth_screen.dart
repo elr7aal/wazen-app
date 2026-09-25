@@ -102,10 +102,10 @@ class _AuthScreenState extends State<AuthScreen> {
     try{
       final result=await WazenApi.instance.forgotPassword(value);
       if(!mounted)return;
-      final delivery=(result['delivery']??'NOT_CONFIGURED').toString();
-      final msg=delivery=='NOT_CONFIGURED'
-        ?(arabic?'خدمة استعادة كلمة المرور جاهزة برمجيًا، لكن مزود البريد لم يتم ربطه بعد.':'Password recovery is implemented, but the email delivery provider is not connected yet.')
-        :(arabic?'إذا كان الحساب موجودًا، ستصلك تعليمات الاستعادة.':'If the account exists, recovery instructions will be sent.');
+      final deliveryAvailable=result['delivery_available']==true;
+      final msg=!deliveryAvailable
+        ?(arabic?'خدمة استعادة كلمة المرور جاهزة، لكن إرسال البريد غير مفعّل في هذه البيئة حاليًا.':'Password recovery is ready, but email delivery is not enabled in this environment.')
+        :(arabic?'إذا كان الحساب موجودًا، ستصلك تعليمات الاستعادة على البريد.':'If the account exists, password reset instructions will be sent by email.');
       await showDialog<void>(context:context,builder:(ctx)=>AlertDialog(
         title:Text(arabic?'استعادة كلمة المرور':'Reset password'),
         content:Text(msg),
