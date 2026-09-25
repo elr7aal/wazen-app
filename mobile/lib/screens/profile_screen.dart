@@ -18,6 +18,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
   Map<String,dynamic>? insights;
   List<Map<String,dynamic>> goalHistory=[];
   Map<String,String> explicitPreferences={};
+  List<Map<String,dynamic>> activeSessions=[];
   bool loading=true,saving=false;
   String? error;
 
@@ -59,7 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
   Future<void> load()async{
     setState(()=>loading=true);
     try{
-      final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights(),WazenApi.instance.goalHistory(limit:8),WazenApi.instance.preferenceSettings()]);
+      final results=await Future.wait([WazenApi.instance.me(),WazenApi.instance.profileInsights(),WazenApi.instance.goalHistory(limit:8),WazenApi.instance.preferenceSettings(),WazenApi.instance.activeSessions()]);
       final u=Map<String,dynamic>.from(results[0] as Map);
       final p=Map<String,dynamic>.from(u['profile'] as Map);
       if(!mounted)return;
@@ -72,6 +73,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
             if((row['target_type']??'').toString()=='TERM')
               (row['target_value']??'').toString():(row['level']??'NEUTRAL').toString(),
         };
+        activeSessions=List<Map<String,dynamic>>.from(results[4] as List);
         weight.text='${p['weight_kg']??''}';
         targetWeight.text='${p['target_weight_kg']??''}';
         budget.text='${p['daily_budget']??''}';
@@ -226,6 +228,39 @@ class _ProfileScreenState extends State<ProfileScreen>{
         const SizedBox(height:16),
         _why(),
         const SizedBox(height:18),
+        _section('أمان الحساب',[
+          Row(children:[
+            const Icon(Icons.devices_other_rounded,color:WazenTheme.greenDark),
+            const SizedBox(width:10),
+            Expanded(child:Text('الجلسات النشطة: ${activeSessions.length}',style:const TextStyle(fontWeight:FontWeight.w800))),
+          ]),
+          const SizedBox(height:10),
+          OutlinedButton.icon(
+            onPressed:activeSessions.isEmpty?null:()async{
+              final ok=await showDialog<bool>(
+                context:context,
+                builder:(ctx)=>AlertDialog(
+                  title:const Text('تسجيل الخروج من جميع الأجهزة؟'),
+                  content:const Text('سيتم إلغاء كل الجلسات النشطة، بما فيها هذه الجلسة. ستحتاج تسجل دخول مرة ثانية.'),
+                  actions:[
+                    TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),
+                    FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تسجيل الخروج من الجميع')),
+                  ],
+                ),
+              );
+              if(ok!=true)return;
+              await WazenApi.instance.logout(allSessions:true);
+              if(context.mounted)Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder:(_)=>const AuthScreen()),
+                (_)=>false,
+              );
+            },
+            icon:const Icon(Icons.logout_rounded),
+            label:const Text('تسجيل الخروج من جميع الأجهزة'),
+          ),
+        ]),
+        const SizedBox(height:18),
         FilledButton(onPressed:saving?null:saveProfile,child:Text(saving?'جاري الحفظ...':'حفظ التغييرات')),
         const SizedBox(height:10),
         TextButton.icon(
@@ -233,7 +268,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
             await WazenApi.instance.logout();
             if(context.mounted)Navigator.pushAndRemoveUntil(context,MaterialPageRoute(builder:(_)=>const AuthScreen()),(_)=>false);
           },
-          icon:const Icon(Icons.logout),label:const Text('تسجيل الخروج')
+          icon:const Icon(Icons.logout),label:const Text('تسجيل الخروج من هذا الجهاز')
         ),
         const SizedBox(height:40),
       ]),
