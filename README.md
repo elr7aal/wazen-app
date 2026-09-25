@@ -371,3 +371,14 @@ Unified Add Food flow:
 - Old COMPLETED records are cleaned after a configurable retention window.
 - Fresh in-progress requests remain protected from parallel duplicate execution.
 - Backend v51 baseline: **139 passing tests**.
+
+
+## v52 — Privacy & Data Controls
+- Authenticated user-data export covering profile, food logs, goals, preferences, health limits, favorites, activity and recommendation history.
+- Security credentials and token/hash material are intentionally excluded from exports.
+- Permanent account deletion requires the current password plus an explicit confirmation contract.
+- Deletion purges all user-linked rows, sessions and idempotency records rather than merely disabling the account.
+- After deletion, existing access tokens, refresh tokens and password login all stop working.
+- Mobile Account → Privacy & Data screen supports copying a JSON export and a guarded permanent-delete flow.
+- Backend v52 baseline: **142 passing tests**.
+- Flutter validation and web build: **passing**.
