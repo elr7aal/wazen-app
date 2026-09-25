@@ -17,7 +17,7 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 </style>
 </head>
 <body>
-<header><h1 style="margin:0">WAZEN Admin</h1><div>مراجعة البيانات، الجودة، الاستيراد، التعديل والدمج — v53</div></header>
+<header><h1 style="margin:0">WAZEN Admin</h1><div>مراجعة البيانات والجودة والأمن — v56</div></header>
 <main>
 <section class="card">
   <div class="row">
@@ -59,6 +59,39 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
   <textarea id="payload" style="width:100%;box-sizing:border-box;margin-top:10px;min-height:180px" placeholder='JSON array أو CSV text'></textarea>
   <div class="row" style="margin-top:10px"><button onclick="runImport()">تشغيل الاستيراد</button><button class="secondary" onclick="sample()">مثال</button></div>
   <pre id="importResult">لم يتم تشغيل استيراد بعد.</pre>
+</section>
+
+
+<section class="card">
+  <div class="row">
+    <h2 class="grow">Security Events</h2>
+    <select id="securityEventType">
+      <option value="">كل الأحداث</option>
+      <option>LOGIN</option>
+      <option>LOGIN_THROTTLED</option>
+      <option>TOKEN_REFRESH</option>
+      <option>LOGOUT</option>
+      <option>LOGOUT_ALL</option>
+      <option>PASSWORD_RESET_REQUEST</option>
+      <option>PASSWORD_RESET</option>
+      <option>PASSWORD_RESET_THROTTLED</option>
+    </select>
+    <select id="securityOutcome">
+      <option value="">كل النتائج</option>
+      <option>SUCCESS</option>
+      <option>FAILURE</option>
+      <option>BLOCKED</option>
+      <option>ACCEPTED</option>
+    </select>
+    <button onclick="loadSecurityEvents()">تحديث</button>
+  </div>
+  <div class="muted">لا يتم عرض البريد الإلكتروني أو عنوان IP الخام؛ تظهر فقط المعرّفات الداخلية والـhashes اللازمة للتدقيق.</div>
+  <div style="overflow:auto;margin-top:12px">
+    <table>
+      <thead><tr><th>الوقت</th><th>الحدث</th><th>النتيجة</th><th>User</th><th>Request ID</th><th>التفاصيل</th></tr></thead>
+      <tbody id="securityEvents"><tr><td colspan="6">لم يتم التحميل بعد.</td></tr></tbody>
+    </table>
+  </div>
 </section>
 
 <section class="card">
@@ -132,6 +165,29 @@ async function loadQuality(){
     </tr>`).join('')||'<tr><td colspan="4">لا توجد مشاكل ضمن النتائج المعروضة</td></tr>';
   }catch(e){
     $('qualitySummary').textContent=e.message;
+  }
+}
+
+
+async function loadSecurityEvents(){
+  try{
+    const p=new URLSearchParams();
+    const t=$('securityEventType').value;
+    const o=$('securityOutcome').value;
+    if(t)p.set('event_type',t);
+    if(o)p.set('outcome',o);
+    p.set('limit','200');
+    const d=await api('/admin/security-events?'+p.toString());
+    $('securityEvents').innerHTML=(d.items||[]).map(x=>`<tr>
+      <td>${x.created_at||'—'}</td>
+      <td><span class="badge">${x.event_type||'—'}</span></td>
+      <td><span class="badge">${x.outcome||'—'}</span></td>
+      <td>${x.user_id||'—'}<div class="muted">${x.subject_hash?('subject '+x.subject_hash.slice(0,12)+'…'):''}</div></td>
+      <td>${x.request_id||'—'}<div class="muted">${x.client_hash?('client '+x.client_hash.slice(0,12)+'…'):''}</div></td>
+      <td><pre style="margin:0;max-width:360px">${JSON.stringify(x.details||{})}</pre></td>
+    </tr>`).join('')||'<tr><td colspan="6">لا توجد أحداث مطابقة.</td></tr>';
+  }catch(e){
+    $('securityEvents').innerHTML='<tr><td colspan="6">'+e.message+'</td></tr>';
   }
 }
 
