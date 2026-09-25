@@ -22,8 +22,11 @@ This checklist complements `GET /api/v1/admin/launch-readiness`. The endpoint re
 ## 3. Authentication
 
 - Email/password sign-in must work end to end.
+- Email verification delivery must be configured.
+- `WAZEN_EMAIL_VERIFY_URL_BASE` must be an absolute HTTPS URL.
 - Password reset email delivery must be configured.
 - `WAZEN_PASSWORD_RESET_URL_BASE` must be an absolute HTTPS URL.
+- Run a real verification-email delivery test to a staging mailbox and confirm the link verifies exactly once.
 - Run a real reset-email delivery test to a staging mailbox.
 - Confirm reset tokens are one-time and old sessions are revoked after reset.
 - Confirm login/recovery throttling returns HTTP 429 with `Retry-After` after configured limits.
