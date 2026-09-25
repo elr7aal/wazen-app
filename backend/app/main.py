@@ -18,6 +18,7 @@ from app.models.schemas import (
     UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
     RefreshTokenRequest, LogoutRequest, ForgotPasswordRequest, ResetPasswordRequest,
     PreferenceSettingRequest, HealthLimitRequest, ActivityLogCreateRequest,
+    DeleteAccountRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -43,6 +44,7 @@ from app.services.system_health import readiness_status
 from app.services.vision_review import build_vision_review
 from app.services.craving_parser import parse_craving_text
 from app.services.idempotency import begin_idempotent, finish_idempotent, abandon_idempotent
+from app.services.privacy import export_user_data, delete_user_data
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -50,7 +52,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.1.0')
+app = FastAPI(title='WAZEN API', version='2.2.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,7 +98,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.1.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.2.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -204,6 +206,30 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             'gender': p.gender, 'condition_context': p.condition_context(), 'food_preferences': p.food_preferences(),
             'disliked_foods': p.disliked_foods(), 'onboarding_complete': p.onboarding_complete,
         }
+    })
+
+
+@app.get('/api/v1/users/me/export')
+def export_me(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return envelope(export_user_data(db,user))
+
+
+@app.delete('/api/v1/users/me')
+def delete_me(
+    req: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(req.password,user.password_hash):
+        raise HTTPException(status_code=401,detail='Invalid password')
+    counts=delete_user_data(db,user.id)
+    return envelope({
+        'deleted':True,
+        'deleted_rows':counts,
+        'message':'Account and associated user data were deleted.',
     })
 
 
