@@ -30,3 +30,40 @@ jobs:
           WAZEN_SECRET: test-secret
           WAZEN_ADMIN_KEY: test-admin-key
         run: pytest -q
+
+  docker-smoke:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t wazen-backend-ci ./backend
+
+      - name: Start backend container
+        run: |
+          docker run -d --name wazen-backend-ci -p 8000:8000 \
+            -e WAZEN_ENV=development \
+            -e JWT_SECRET=ci-only-secret-value-with-more-than-32-characters \
+            -e WAZEN_ADMIN_KEY=ci-admin-key \
+            wazen-backend-ci
+
+      - name: Wait for migrated API health
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health > /tmp/wazen-health.json; then
+              cat /tmp/wazen-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs wazen-backend-ci
+          exit 1
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs wazen-backend-ci || true
+
+      - name: Stop backend container
+        if: always()
+        run: docker rm -f wazen-backend-ci || true
