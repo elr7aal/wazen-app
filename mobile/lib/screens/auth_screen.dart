@@ -29,7 +29,23 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
+
+  String? passwordPolicyError(String value){
+    if(value.length<8)return arabic?'كلمة المرور لازم تكون 8 أحرف على الأقل.':'Password must be at least 8 characters.';
+    if(!RegExp(r'[A-Z]').hasMatch(value))return arabic?'أضف حرف إنجليزي كبير واحد على الأقل.':'Add at least one uppercase letter.';
+    if(!RegExp(r'[a-z]').hasMatch(value))return arabic?'أضف حرف إنجليزي صغير واحد على الأقل.':'Add at least one lowercase letter.';
+    if(!RegExp(r'[0-9]').hasMatch(value))return arabic?'أضف رقمًا واحدًا على الأقل.':'Add at least one number.';
+    return null;
+  }
+
   Future<void> submit() async {
+    if(registerMode){
+      final policy=passwordPolicyError(password.text);
+      if(policy!=null){
+        setState(()=>error=policy);
+        return;
+      }
+    }
     setState((){loading=true;error=null;});
     try{
       if(showAdvanced&&apiUrl.text.trim().isNotEmpty){
@@ -167,7 +183,7 @@ class _AuthScreenState extends State<AuthScreen> {
             decoration:InputDecoration(
               labelText:arabic?'كلمة المرور':'Password',
               helperText:registerMode
-                ?(arabic?'8 أحرف على الأقل':'At least 8 characters')
+                ?(arabic?'8+ أحرف مع حرف كبير وصغير ورقم':'8+ chars with uppercase, lowercase and a number')
                 :null,
             ),
           ),
