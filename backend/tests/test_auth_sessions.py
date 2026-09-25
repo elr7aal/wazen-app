@@ -83,3 +83,50 @@ def test_forgot_password_does_not_reveal_missing_account():
     data=r.json()['data']
     assert data['accepted'] is True
     assert 'debug_reset_token' not in data
+
+
+def test_weak_registration_password_is_rejected():
+    email=f"weak-{uuid4().hex[:8]}@example.com"
+    r=client.post('/api/v1/auth/register',json={
+        'email':email,
+        'password':'weakpass',
+        'first_name':'Weak QA',
+    })
+    assert r.status_code==422
+
+
+def test_expired_access_token_is_rejected():
+    import jwt
+    from datetime import datetime, timedelta, timezone
+    from app.security import JWT_SECRET, JWT_ALG
+
+    email,data=register_user()
+    payload={
+        'sub':data['user_id'],
+        'iat':datetime.now(timezone.utc)-timedelta(hours=2),
+        'exp':datetime.now(timezone.utc)-timedelta(hours=1),
+        'type':'access',
+    }
+    expired=jwt.encode(payload,JWT_SECRET,algorithm=JWT_ALG)
+    r=client.get('/api/v1/users/me',headers={'Authorization':f'Bearer {expired}'})
+    assert r.status_code==401
+    assert r.json()['detail']=='Invalid or expired token'
+
+
+def test_weak_reset_password_is_rejected_by_policy():
+    email,data=register_user()
+    os.environ['WAZEN_PASSWORD_RESET_DEBUG']='1'
+    forgot=client.post('/api/v1/auth/forgot-password',json={'email':email})
+    token=forgot.json()['data']['debug_reset_token']
+    r=client.post('/api/v1/auth/reset-password',json={
+        'token':token,
+        'new_password':'alllowercase',
+    })
+    assert r.status_code==422
+
+    # The token was not consumed by a schema validation failure.
+    strong=client.post('/api/v1/auth/reset-password',json={
+        'token':token,
+        'new_password':'FreshPass789!',
+    })
+    assert strong.status_code==200
