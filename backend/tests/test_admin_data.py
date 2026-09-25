@@ -115,3 +115,130 @@ def test_csv_dry_run_supported():
     assert r.status_code == 200
     assert r.json()['data']['summary']['total'] == 1
     assert r.json()['data']['summary']['errors'] == 0
+
+
+def test_admin_edit_records_before_after_audit():
+    payload = {
+        'format': 'JSON',
+        'dry_run': False,
+        'records': [{
+            'id': 'QA-EDIT-001',
+            'name_en': 'Editable Meal',
+            'food_type': 'RESTAURANT',
+            'vendor_name': 'QA Kitchen',
+            'calories': 500,
+            'protein_g': 25,
+            'carbs_g': 50,
+            'fat_g': 18,
+            'sodium_mg': 900,
+        }],
+    }
+    create=client.post('/api/v1/admin/import/foods',json=payload,headers=HEADERS)
+    assert create.status_code==200
+
+    edit=client.patch('/api/v1/admin/foods/QA-EDIT-001',headers=HEADERS,json={
+        'changes':{
+            'name_ar':'وجبة معدلة',
+            'nutrition':{
+                'calories':460,
+                'protein_g':31,
+                'sodium_mg':700,
+            },
+            'allergens':[
+                {'code':'MILK','relationship_type':'CONTAINS'},
+                {'code':'SESAME','relationship_type':'MAY_CONTAIN'},
+            ],
+        }
+    })
+    assert edit.status_code==200,edit.text
+    data=edit.json()['data']
+    assert data['name_ar']=='وجبة معدلة'
+    assert data['nutrition']['calories']==460
+    assert {x['code'] for x in data['allergens']}=={'MILK','SESAME'}
+
+    audit=client.get('/api/v1/admin/audit',headers=HEADERS)
+    assert audit.status_code==200
+    rows=audit.json()['data']['items']
+    row=next(x for x in rows if x['action']=='FOOD_EDIT' and x['entity_id']=='QA-EDIT-001')
+    import json as _json
+    details=_json.loads(row['details_json'])
+    assert details['before']['nutrition']['calories']==500
+    assert details['after']['nutrition']['calories']==460
+
+
+def test_admin_merge_moves_references_and_soft_retires_source():
+    source_payload = {
+        'format':'JSON','dry_run':False,
+        'records':[
+            {
+                'id':'QA-MERGE-SOURCE',
+                'name_en':'Duplicate Meal',
+                'food_type':'RESTAURANT',
+                'vendor_name':'QA Kitchen',
+                'calories':410,
+                'protein_g':22,
+                'carbs_g':44,
+                'fat_g':14,
+                'sodium_mg':620,
+            },
+            {
+                'id':'QA-MERGE-TARGET',
+                'name_en':'Canonical Meal',
+                'food_type':'RESTAURANT',
+                'vendor_name':'QA Kitchen',
+                'calories':410,
+                'protein_g':22,
+                'carbs_g':44,
+                'fat_g':14,
+                'sodium_mg':620,
+            },
+        ],
+    }
+    r=client.post('/api/v1/admin/import/foods',json=source_payload,headers=HEADERS)
+    assert r.status_code==200
+
+    auth=client.post('/api/v1/auth/register',json={
+        'email':'merge-admin-test@example.com',
+        'password':'StrongPass123!',
+        'first_name':'Merge QA',
+    })
+    assert auth.status_code in (200,409)
+    if auth.status_code==200:
+        token=auth.json()['data']['access_token']
+    else:
+        login=client.post('/api/v1/auth/login',json={
+            'email':'merge-admin-test@example.com',
+            'password':'StrongPass123!',
+        })
+        token=login.json()['data']['access_token']
+    user_headers={'Authorization':f'Bearer {token}'}
+
+    log=client.post('/api/v1/food-log/from-catalog',headers=user_headers,json={
+        'food_id':'QA-MERGE-SOURCE',
+        'meal_type':'LUNCH',
+        'quantity':1,
+    })
+    assert log.status_code==200
+    log_id=log.json()['data']['log']['id']
+    fav=client.post(f'/api/v1/food-log/{log_id}/favorite',headers=user_headers)
+    assert fav.status_code==200
+
+    merge=client.post('/api/v1/admin/foods/merge',headers=HEADERS,json={
+        'source_id':'QA-MERGE-SOURCE',
+        'target_id':'QA-MERGE-TARGET',
+    })
+    assert merge.status_code==200,merge.text
+    assert merge.json()['data']['source_status']=='MERGED'
+
+    day=client.get('/api/v1/food-log/today',headers=user_headers).json()['data']['items']
+    assert any(x['id']==log_id and x['food_id']=='QA-MERGE-TARGET' for x in day)
+
+    favorites=client.get('/api/v1/food-log/favorites',headers=user_headers).json()['data']['items']
+    assert any(x['food_id']=='QA-MERGE-TARGET' for x in favorites)
+
+    search=client.get('/api/v1/foods/search',params={'q':'Duplicate Meal'})
+    assert search.status_code==200
+    assert all(x['food_id']!='QA-MERGE-SOURCE' for x in search.json()['data']['items'])
+
+    audit=client.get('/api/v1/admin/audit',headers=HEADERS).json()['data']['items']
+    assert any(x['action']=='FOOD_MERGE' and x['entity_id']=='QA-MERGE-TARGET' for x in audit)
