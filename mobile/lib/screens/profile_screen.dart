@@ -32,6 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
   String goal='MAINTAIN';
   String activity='LIGHT';
   Set<String> allergies={};
+  Set<String> conditionContext={};
   Set<String> prefs={};
   Set<String> dislikes={};
 
@@ -43,6 +44,10 @@ class _ProfileScreenState extends State<ProfileScreen>{
   static const allergenOptions={
     'PEANUT':'الفول السوداني','MILK':'الحليب','EGG':'البيض','FISH':'السمك',
     'GLUTEN':'الغلوتين','SOY':'الصويا','SESAME':'السمسم','NUTS':'المكسرات',
+  };
+  static const conditionOptions={
+    'DIABETES':'سكري','HYPERTENSION':'ضغط','KIDNEY':'كلى','HEART':'قلب',
+    'PREGNANCY':'حمل','OTHER':'أخرى',
   };
 
   @override void initState(){super.initState();load();}
@@ -78,6 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen>{
         goal=(p['goal_type']??'MAINTAIN').toString();
         activity=(p['activity_level']??'LIGHT').toString();
         allergies=Set<String>.from((p['severe_allergens'] as List? ?? const []).map((x)=>x.toString()));
+        conditionContext=Set<String>.from((p['condition_context'] as List? ?? const []).map((x)=>x.toString()));
         prefs=Set<String>.from((p['food_preferences'] as List? ?? const []).map((x)=>x.toString()));
         dislikes=Set<String>.from((p['disliked_foods'] as List? ?? const []).map((x)=>x.toString()));
       });
@@ -95,7 +101,8 @@ class _ProfileScreenState extends State<ProfileScreen>{
         'target_calories':_n(calories),'target_protein_g':_n(protein),
         'target_carbs_g':_n(carbs),'target_fat_g':_n(fat),'target_fiber_g':_n(fiber),
         'goal_type':goal,'activity_level':activity,
-        'severe_allergens':allergies.toList(),'food_preferences':prefs.toList(),'disliked_foods':dislikes.toList(),
+        'severe_allergens':allergies.toList(),'condition_context':conditionContext.toList(),
+        'food_preferences':prefs.toList(),'disliked_foods':dislikes.toList(),
       });
       if(mounted){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('تم حفظ التغييرات.')));await load();}
     }catch(e){if(mounted)setState(()=>error=e.toString());}
@@ -192,6 +199,15 @@ class _ProfileScreenState extends State<ProfileScreen>{
           )).toList()),
           const SizedBox(height:8),
           const Text('هذه فقط هي التي تعمل كاستبعاد تلقائي. لا نستخدم التفضيلات بدل قواعد السلامة.',style:TextStyle(color:Colors.black54)),
+          const SizedBox(height:16),
+          const Text('سياق صحي اختياري',style:TextStyle(fontWeight:FontWeight.w900)),
+          const SizedBox(height:8),
+          Wrap(spacing:8,runSpacing:8,children:conditionOptions.entries.map((e)=>FilterChip(
+            label:Text(e.value),selected:conditionContext.contains(e.key),
+            onSelected:(v)=>setState(()=>v?conditionContext.add(e.key):conditionContext.remove(e.key)),
+          )).toList()),
+          const SizedBox(height:8),
+          const Text('هذا السياق لا يغيّر التوصيات تلقائيًا. أي حد غذائي مؤثر لازم تضيفه صراحة من «إدارة الحدود الصحية».',style:TextStyle(color:Colors.black54,height:1.4)),
           const SizedBox(height:12),
           OutlinedButton.icon(
             onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>const HealthLimitsScreen())),
