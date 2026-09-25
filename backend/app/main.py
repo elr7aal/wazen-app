@@ -19,7 +19,7 @@ from app.models.schemas import (
     UserRecommendationRequest, CatalogFoodLogRequest, GoldenFlowRequest, ModifiedCatalogFoodLogRequest, FoodLogUpdateRequest, OnboardingCompleteRequest, TextFoodParseRequest, ImageFoodAnalyzeRequest, RecommendationFeedbackRequest, PlanRecalculateRequest,
     RefreshTokenRequest, LogoutRequest, ForgotPasswordRequest, ResetPasswordRequest,
     PreferenceSettingRequest, HealthLimitRequest, ActivityLogCreateRequest,
-    DeleteAccountRequest,
+    DeleteAccountRequest, VerifyEmailRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
 from app.deps import get_current_user
@@ -35,6 +35,7 @@ from app.services.profile_insights import profile_insights
 from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods, edit_food, merge_foods
 from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
 from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset, list_active_sessions
+from app.services.email_verification import create_email_verification, consume_email_verification, verification_resend_retry_after
 from app.services.goal_history import add_goal_snapshot, list_goal_history
 from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
@@ -50,7 +51,7 @@ from app.services.source_quality import catalog_quality_report
 from app.services.auth_rate_limit import check_allowed, record_failure, clear_subject, cleanup_rate_limits, login_rate_keys, reset_rate_keys
 from app.services.security_events import log_security_event, list_security_events, clear_subject_security_events
 from app.services.observability import log_operational_event, list_operational_events, operations_summary, SLOW_REQUEST_MS
-from app.services.email_delivery import send_password_reset_email, password_reset_delivery_available
+from app.services.email_delivery import send_password_reset_email, password_reset_delivery_available, send_email_verification, email_verification_delivery_available
 from app.services.integration_capabilities import integration_capabilities, integration_admin_summary
 from app.services.launch_readiness import production_launch_gate
 
@@ -60,7 +61,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.10.0')
+app = FastAPI(title='WAZEN API', version='2.11.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -171,7 +172,7 @@ def capabilities():
 
 # -------- Authentication --------
 @app.post('/api/v1/auth/register')
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     email = req.email.strip().lower()
     if '@' not in email:
         raise HTTPException(status_code=422, detail='Valid email required')
@@ -181,8 +182,24 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(u); db.flush()
     p = UserProfile(user_id=u.id)
     db.add(p); db.commit(); db.refresh(u)
+    raw=create_email_verification(db,u)
+    delivery=send_email_verification(u.email,raw)
+    log_security_event(
+        db,
+        event_type='EMAIL_VERIFICATION_SENT',
+        outcome=delivery,
+        user_id=u.id,
+        subject=u.email,
+        client_host=request.client.host if request.client else None,
+        request_id=getattr(request.state,'request_id',None),
+    )
     session = issue_session(db, u.id)
-    return envelope({'user_id': u.id, **session})
+    return envelope({
+        'user_id': u.id,
+        'email_verified':False,
+        'verification_delivery':delivery,
+        **session,
+    })
 
 
 @app.post('/api/v1/auth/login')
@@ -222,7 +239,61 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     clear_subject(db,'LOGIN_EMAIL',email)
     session=issue_session(db, u.id)
     log_security_event(db,event_type='LOGIN',outcome='SUCCESS',user_id=u.id,subject=email,client_host=client_host,request_id=request_id,details={'session_id':session.get('session_id')})
-    return envelope({'user_id': u.id, **session})
+    return envelope({'user_id': u.id, 'email_verified':bool(u.email_verified), **session})
+
+
+@app.post('/api/v1/auth/verify-email')
+def verify_email(req: VerifyEmailRequest, request: Request, db: Session = Depends(get_db)):
+    try:
+        user=consume_email_verification(db,req.token)
+    except ValueError:
+        log_security_event(
+            db,
+            event_type='EMAIL_VERIFICATION',
+            outcome='FAILURE',
+            client_host=request.client.host if request.client else None,
+            request_id=getattr(request.state,'request_id',None),
+        )
+        raise HTTPException(status_code=400,detail='Invalid or expired verification token')
+    log_security_event(
+        db,
+        event_type='EMAIL_VERIFICATION',
+        outcome='SUCCESS',
+        user_id=user.id,
+        subject=user.email,
+        client_host=request.client.host if request.client else None,
+        request_id=getattr(request.state,'request_id',None),
+    )
+    return envelope({'verified':True,'email_verified':True})
+
+
+@app.post('/api/v1/auth/resend-verification')
+def resend_verification(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user.email_verified:
+        return envelope({'accepted':True,'already_verified':True,'delivery':'NOT_NEEDED'})
+    retry_after=verification_resend_retry_after(db,user.id)
+    if retry_after>0:
+        raise HTTPException(
+            status_code=429,
+            detail='Verification email was requested recently. Try again later.',
+            headers={'Retry-After':str(retry_after)},
+        )
+    raw=create_email_verification(db,user)
+    delivery=send_email_verification(user.email,raw)
+    log_security_event(
+        db,
+        event_type='EMAIL_VERIFICATION_SENT',
+        outcome=delivery,
+        user_id=user.id,
+        subject=user.email,
+        client_host=request.client.host if request.client else None,
+        request_id=getattr(request.state,'request_id',None),
+    )
+    return envelope({'accepted':True,'already_verified':False,'delivery':delivery})
 
 
 @app.post('/api/v1/auth/refresh')
@@ -346,7 +417,7 @@ def reset_password(req: ResetPasswordRequest, request: Request, db: Session = De
 def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     p = ensure_profile(db, user)
     return envelope({
-        'id': user.id, 'email': user.email, 'first_name': user.first_name, 'language': user.language,
+        'id': user.id, 'email': user.email, 'email_verified': bool(user.email_verified), 'email_verified_at': user.email_verified_at.isoformat() if user.email_verified_at else None, 'first_name': user.first_name, 'language': user.language,
         'profile': {
             'height_cm': p.height_cm, 'weight_kg': p.weight_kg, 'target_weight_kg': p.target_weight_kg,
             'activity_level': p.activity_level, 'goal_type': p.goal_type, 'daily_budget': p.daily_budget,
