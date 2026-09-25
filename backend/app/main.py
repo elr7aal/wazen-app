@@ -53,7 +53,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.3.0')
+app = FastAPI(title='WAZEN API', version='2.4.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,7 +99,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.3.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.4.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
