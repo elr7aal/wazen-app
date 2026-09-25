@@ -476,3 +476,26 @@ Unified Add Food flow:
 - Admin console includes a Production Launch Gate dashboard.
 - Added `docs/PRODUCTION_LAUNCH_CHECKLIST.md`.
 - Backend v61 baseline: **179 passing tests**.
+
+
+## v62 — Capability-aware Image Logging
+- Camera/image analysis UI now reflects the real Vision capability contract.
+- Image analysis stays disabled when no provider is configured instead of implying that it works.
+- Review-only behavior remains mandatory when Vision is available.
+
+## v63 — Password Reset Completion Routing
+- Added a dedicated Flutter password-reset completion screen.
+- Reset tokens from emailed links route into the client instead of stopping at the API contract.
+- Successful password reset clears the local session and returns the user to sign-in.
+- Reset-link client routing is documented for production configuration.
+
+## v64 — Email Verification
+- New accounts track explicit email ownership state.
+- Time-limited one-time verification tokens are stored only as hashes.
+- SMTP verification links use a dedicated `WAZEN_EMAIL_VERIFY_URL_BASE`.
+- Existing pre-v64 accounts are grandfathered as verified during migration.
+- Authenticated resend uses a cooldown and replaces older pending verification links.
+- Account UI exposes verified/unverified state and resend action.
+- Client routing now distinguishes `/verify-email` from `/reset-password` links even though both use a `token` query parameter.
+- Production Launch Gate now requires configured HTTPS email-verification delivery.
+- Added Alembic revision `0006_email_verification`.
