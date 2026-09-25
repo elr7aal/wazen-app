@@ -612,4 +612,13 @@ class WazenApi {
     await clearSession();
   }
 
+
+  Future<Map<String,dynamic>> capabilities() async {
+    final r=await http.get(
+      Uri.parse('$baseUrl/capabilities'),
+      headers:{'Content-Type':'application/json'},
+    );
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
 }
