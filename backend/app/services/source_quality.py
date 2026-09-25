@@ -47,6 +47,26 @@ def source_freshness(source, now: datetime | None=None):
     return {'status':status,'age_days':age}
 
 
+
+def source_quality_score(source, freshness: dict | None=None) -> float:
+    freshness=freshness or source_freshness(source)
+    confidence=(source.confidence_level or '').upper() if source else ''
+    base={
+        'VERIFIED':100.0,
+        'HIGH':90.0,
+        'MEDIUM':75.0,
+        'LOW':55.0,
+        'ESTIMATED':45.0,
+    }.get(confidence,60.0 if source else 40.0)
+
+    penalty={
+        'FRESH':0.0,
+        'AGING':10.0,
+        'STALE':25.0,
+        'UNKNOWN':20.0,
+    }.get(freshness.get('status'),20.0)
+    return max(0.0,min(100.0,base-penalty))
+
 def catalog_quality_report(db: Session, limit: int=100):
     foods=db.scalars(
         select(FoodItem)
