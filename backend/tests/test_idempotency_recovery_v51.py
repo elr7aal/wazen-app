@@ -123,3 +123,72 @@ def test_old_completed_records_are_cleaned_on_next_protected_write():
         )
         assert claim['mode']=='CLAIM'
         assert db.get(IdempotencyRecord,old_id) is None
+
+
+
+def test_stale_key_with_different_payload_still_conflicts():
+    user_id=_user_id()
+    key='stale-conflict-001'
+    path='/api/v1/food-log'
+    original={'food_name':'Original','calories':300}
+
+    with SessionLocal() as db:
+        row=IdempotencyRecord(
+            user_id=user_id,
+            method='POST',
+            path=path,
+            idempotency_key=key,
+            request_hash=_payload_hash(original),
+            state='PENDING',
+            created_at=datetime.utcnow()-timedelta(seconds=STALE_SECONDS+10),
+        )
+        db.add(row)
+        db.commit()
+
+    with SessionLocal() as db:
+        try:
+            begin_idempotent(
+                db,
+                user_id=user_id,
+                method='POST',
+                path=path,
+                key=key,
+                payload={'food_name':'Changed','calories':450},
+            )
+            assert False,'stale key must not be reusable for a different payload'
+        except ValueError as exc:
+            assert str(exc)=='IDEMPOTENCY_PAYLOAD_CONFLICT'
+
+
+def test_retention_does_not_delete_recent_completed_record():
+    user_id=_user_id()
+    key='recent-completed-001'
+    path='/api/v1/activity-log'
+    payload={'calories_credit':80}
+
+    with SessionLocal() as db:
+        row=IdempotencyRecord(
+            user_id=user_id,
+            method='POST',
+            path=path,
+            idempotency_key=key,
+            request_hash=_payload_hash(payload),
+            state='COMPLETED',
+            response_json='{"success":true,"data":{"activity_credit":80}}',
+            created_at=datetime.utcnow()-timedelta(minutes=10),
+            completed_at=datetime.utcnow()-timedelta(minutes=9),
+        )
+        db.add(row)
+        db.commit()
+
+    with SessionLocal() as db:
+        replay=begin_idempotent(
+            db,
+            user_id=user_id,
+            method='POST',
+            path=path,
+            key=key,
+            payload=payload,
+        )
+        assert replay['mode']=='REPLAY'
+        assert replay['response']['data']['activity_credit']==80
