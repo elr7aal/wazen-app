@@ -6,6 +6,7 @@ from app.models.schemas import DailyStateRequest, RecommendationRequest
 from app.services.recommendation import recommend_now
 from app.services.preferences import preference_context
 from app.services.health_limits import health_limit_rows, serialize_health_limit
+from app.services.recommendation_audit import record_exclusions
 
 
 def ensure_profile(db: Session, user: User) -> UserProfile:
@@ -85,7 +86,17 @@ def recommend_for_user(db: Session, user: User, vendor=None, category=None, max_
         never_show_food_ids=pref_ctx['never_show_food_ids'],
         health_limits=[serialize_health_limit(x) for x in health_limit_rows(db,user.id)],
     )
-    return recommend_now(db, req)
+    result=recommend_now(db, req)
+    context={
+        'vendor':vendor,
+        'category':category,
+        'max_calories':max_calories,
+        'min_protein_g':min_protein_g,
+        'budget_max':budget_max or p.daily_budget,
+        'allow_modifications':allow_modifications,
+    }
+    result['exclusion_audit_count']=record_exclusions(db,user.id,result.get('excluded',[]),context)
+    return result
 
 
 def log_catalog_food(db: Session, user: User, food, meal_type: str, quantity: float = 1.0, entry_method: str = 'CATALOG'):
