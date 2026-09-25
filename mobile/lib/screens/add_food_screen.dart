@@ -25,6 +25,8 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
   final maxPrice=TextEditingController();
   final stt.SpeechToText speech=stt.SpeechToText();
   bool listening=false;
+  bool visionAvailable=false;
+  bool visionCapabilityLoading=true;
   Map<String,dynamic>? visionResult;
   String meal='SNACK';
   bool loading=false;
@@ -35,7 +37,26 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
 
   static const meals={'BREAKFAST':'فطور','LUNCH':'غداء','DINNER':'عشاء','SNACK':'سناك'};
 
-  @override void initState(){super.initState();tabs=TabController(length:4,vsync:this);}
+  @override
+  void initState(){
+    super.initState();
+    tabs=TabController(length:4,vsync:this);
+    _loadCapabilities();
+  }
+
+  Future<void> _loadCapabilities() async{
+    try{
+      final data=await WazenApi.instance.capabilities();
+      final vision=data['vision'];
+      if(mounted)setState((){
+        visionAvailable=vision is Map && vision['available']==true;
+      });
+    }catch(_){
+      if(mounted)setState(()=>visionAvailable=false);
+    }finally{
+      if(mounted)setState(()=>visionCapabilityLoading=false);
+    }
+  }
   @override void dispose(){tabs.dispose();search.dispose();natural.dispose();caption.dispose();maxCalories.dispose();minProtein.dispose();maxSodium.dispose();maxPrice.dispose();super.dispose();}
 
   Future<void> showResults(List<FoodDetail> x,String msg)async{
@@ -101,6 +122,10 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
   }
 
   Future<void> pickImage()async{
+    if(!visionAvailable){
+      if(mounted)setState(()=>message='تحليل الصور غير مفعّل حاليًا. استخدم البحث أو النص أو الباركود.');
+      return;
+    }
     final file=await ImagePicker().pickImage(source:ImageSource.camera,imageQuality:70,maxWidth:1600);
     if(file==null)return;
     setState(()=>loading=true);
@@ -213,11 +238,41 @@ class _AddFoodScreenState extends State<AddFoodScreen> with SingleTickerProvider
         ListView(padding:const EdgeInsets.all(18),children:[
           const Text('صوّر وجبتك ثم راجع النتيجة قبل تسجيلها.',style:TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
           const SizedBox(height:12),
-          TextField(controller:caption,decoration:const InputDecoration(labelText:'وصف اختياري يساعد التحليل',hintText:'مثال: زنجر من KFC')),
+          if(visionCapabilityLoading)
+            const LinearProgressIndicator(minHeight:2)
+          else if(!visionAvailable)
+            Container(
+              padding:const EdgeInsets.all(14),
+              decoration:BoxDecoration(
+                color:const Color(0xFFFFF4E5),
+                borderRadius:BorderRadius.circular(14),
+              ),
+              child:const Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Icon(Icons.info_outline,color:Colors.orange),
+                SizedBox(width:10),
+                Expanded(child:Text(
+                  'تحليل الصور غير مفعّل في هذه البيئة حاليًا. تقدر تستخدم البحث أو الوصف النصي أو الباركود.',
+                  style:TextStyle(height:1.4),
+                )),
+              ]),
+            ),
           const SizedBox(height:12),
-          FilledButton.icon(onPressed:pickImage,icon:const Icon(Icons.camera_alt),label:const Text('التقط صورة')),
+          TextField(
+            controller:caption,
+            enabled:visionAvailable,
+            decoration:const InputDecoration(labelText:'وصف اختياري يساعد التحليل',hintText:'مثال: زنجر من KFC'),
+          ),
+          const SizedBox(height:12),
+          FilledButton.icon(
+            onPressed:visionAvailable&&!loading?pickImage:null,
+            icon:const Icon(Icons.camera_alt),
+            label:Text(visionAvailable?'التقط صورة':'تحليل الصور غير متاح'),
+          ),
           const SizedBox(height:10),
-          const Text('في نسخة Alpha الحالية لا يتم اختلاق تقدير للصورة إذا لم يكن مزوّد Vision مفعّلًا.',style:TextStyle(color:Colors.black54)),
+          const Text(
+            'إذا كان Vision مفعّلًا، النتيجة تظل تقديرية وتحتاج مراجعتك قبل حفظ أي عنصر.',
+            style:TextStyle(color:Colors.black54),
+          ),
         ]),
         ListView(padding:const EdgeInsets.all(18),children:[
           const Text('امسح باركود المنتج لمطابقته مع قاعدة السوبرماركت.',style:TextStyle(fontSize:17,fontWeight:FontWeight.w800)),
