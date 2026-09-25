@@ -140,6 +140,7 @@ class UserRecommendationRequest(BaseModel):
     vendor: Optional[str] = None
     category: Optional[str] = None
     max_calories: Optional[float] = Field(default=None, ge=0)
+    min_protein_g: Optional[float] = Field(default=None, ge=0)
     budget_max: Optional[float] = Field(default=None, ge=0)
     allow_modifications: bool = True
 
