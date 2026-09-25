@@ -444,3 +444,25 @@ Unified Add Food flow:
 - Added `docs/POSTGRES_BACKUP_RESTORE.md` with a production/staging backup and restore runbook.
 - This validates application/schema recovery mechanics; managed-provider backup retention and a restore drill against the actual production PostgreSQL service remain deployment responsibilities.
 - PostgreSQL backup/restore CI drill: **passing**.
+
+
+## v59 — Password Reset Email Delivery
+- SMTP password-reset delivery adapter with TLS/SSL support and no secrets committed to source.
+- Public forgot-password responses are account-enumeration safe: existing and non-existing accounts receive the same public acceptance contract.
+- Delivery availability reflects only global environment configuration, never whether an email address exists.
+- Provider delivery status is retained only in restricted security audit events.
+- Debug reset tokens are disabled in production even if the debug flag is accidentally set.
+- Added `docs/PASSWORD_RESET_EMAIL.md`.
+- Backend v59 baseline: **169 passing tests**.
+- Docker migration/readiness smoke and PostgreSQL backup/restore drill: **passing**.
+- Flutter tests and web validation: **passing**.
+
+## v60 — Integration Capabilities
+- Added a safe public `GET /api/v1/capabilities` contract describing implemented/available integrations without exposing credentials.
+- Email/password authentication is explicitly available; Apple, Google and mobile OTP remain explicitly NOT_IMPLEMENTED until real secure flows exist.
+- Password-reset email and Vision availability reflect their actual environment configuration.
+- Added restricted `GET /api/v1/admin/integrations` with concrete remaining integration actions.
+- First-run mobile UI reads the capability contract and keeps unavailable external sign-in providers disabled rather than implying they work.
+- Admin console includes an Integration Readiness section.
+- Backend v60 baseline: **173 passing tests**.
+- Docker migration/readiness smoke and PostgreSQL backup/restore drill: **passing**.
