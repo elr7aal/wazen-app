@@ -356,3 +356,18 @@ Unified Add Food flow:
 - Manual activity credit logging is idempotent and cannot double-count calories after a retry.
 - Flutter preserves the same per-action key through automatic token refresh/retry for both flows.
 - Backend v49 baseline: **130 passing tests**.
+
+
+## v50 — Mutation Safety
+- Idempotency extended to recommendation feedback, favorite creation, weekly-plan generation and day rebalance.
+- Repeated retries replay the original mutation response instead of creating duplicate behavioral signals or regenerating plan rows.
+- Flutter preserves one per-action idempotency key through auth refresh/retry.
+- Backend v50 baseline: **134 passing tests**.
+- Flutter validation: passing.
+
+## v51 — Idempotency Recovery
+- Stale PENDING idempotency claims can be safely recovered after a configurable timeout.
+- Reusing a stale key with a different payload still returns a conflict.
+- Old COMPLETED records are cleaned after a configurable retention window.
+- Fresh in-progress requests remain protected from parallel duplicate execution.
+- Backend v51 baseline: **139 passing tests**.
