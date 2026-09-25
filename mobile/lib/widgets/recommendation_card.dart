@@ -42,6 +42,7 @@ class RecommendationCard extends StatelessWidget {
               _chip('${item.nutrition.proteinG?.toStringAsFixed(0) ?? '—'}g بروتين'),
               if(item.price!=null)_chip('${item.currency??'AED'} ${item.price!.toStringAsFixed(0)}'),
               _chip(decisionLabel),
+              if(item.sourceFreshness!=null)_chip(_freshnessLabel(item.sourceFreshness!,item.sourceAgeDays)),
             ]),
             if (item.reasons.isNotEmpty) ...[
               const SizedBox(height: 14),
@@ -96,11 +97,23 @@ class RecommendationCard extends StatelessWidget {
     return value;
   }
 
+  String _freshnessLabel(String status,int? age){
+    switch(status){
+      case 'FRESH': return age==null?'مصدر حديث':'تحقق قبل $age يوم';
+      case 'AGING': return age==null?'مصدر يحتاج تحديث':'تحقق قبل $age يوم';
+      case 'STALE': return age==null?'مصدر قديم':'مصدر قديم • $age يوم';
+      default: return 'تاريخ التحقق غير معروف';
+    }
+  }
+
   String _translateWarning(String value) {
     switch(value){
       case 'HIGH_SODIUM_FOR_REMAINING_DAY': return 'صوديوم مرتفع بالنسبة لباقي اليوم';
       case 'OVER_BUDGET': return 'أعلى من الميزانية المحددة';
       case 'ALLERGEN_CROSS_CONTACT_WARNING': return 'يوجد تنبيه احتمال تلامس مع مسبب حساسية';
+      case 'SOURCE_STALE': return 'بيانات المصدر قديمة وتحتاج إعادة تحقق';
+      case 'SOURCE_AGING': return 'مر وقت على آخر تحقق من المصدر';
+      case 'SOURCE_VERIFICATION_UNKNOWN': return 'تاريخ التحقق من المصدر غير متوفر';
       case 'MISSING_HEALTH_DATA': return 'بعض البيانات الصحية غير متوفرة';
       default:
         if(value.startsWith('MISSING_')) return 'بيانات غذائية مطلوبة غير متوفرة';
