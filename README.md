@@ -402,3 +402,15 @@ Unified Add Food flow:
 - Recommendation audit scores now include `source_quality`.
 - Backend v54 baseline: **148 passing tests**.
 - Docker migration/readiness smoke: **passing**.
+
+
+## v55 — Authentication Abuse Protection
+- Persistent database-backed throttling for login and password-recovery abuse.
+- Account/email and wider shared-network limits are evaluated separately.
+- Subjects are stored only as HMAC hashes; raw email/IP values are not persisted in the throttle table.
+- Login throttling returns HTTP 429 with Retry-After and successful authentication clears the email failure counter.
+- Password recovery is throttled identically for existing and non-existing accounts to avoid account enumeration.
+- Email throttle hashes are cleared during permanent account deletion.
+- Added Alembic revision `0003_auth_rate_limits`.
+- Backend v55 baseline: **152 passing tests**.
+- Docker migration/readiness smoke: **passing**.
