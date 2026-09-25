@@ -10,14 +10,40 @@ from app.services.auth_sessions import token_hash, utcnow
 
 
 VERIFY_MINUTES=max(10,int(os.getenv('WAZEN_EMAIL_VERIFY_MINUTES','60')))
+RESEND_SECONDS=max(30,int(os.getenv('WAZEN_EMAIL_VERIFY_RESEND_SECONDS','60')))
 
 
-def create_email_verification(db: Session,user: User):
+def verification_resend_retry_after(db: Session,user_id: str) -> int:
+    latest=db.scalar(
+        select(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id==user_id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+        .order_by(EmailVerificationToken.created_at.desc())
+        .limit(1)
+    )
+    if not latest:
+        return 0
+    elapsed=(utcnow()-latest.created_at).total_seconds()
+    return max(0,int(RESEND_SECONDS-elapsed))
+
+
+def create_email_verification(db: Session,user: User,*,replace_pending: bool=True):
+    now=utcnow()
+    if replace_pending:
+        rows=db.scalars(select(EmailVerificationToken).where(
+            EmailVerificationToken.user_id==user.id,
+            EmailVerificationToken.used_at.is_(None),
+        )).all()
+        for row in rows:
+            row.used_at=now
     raw=secrets.token_urlsafe(48)
     row=EmailVerificationToken(
         user_id=user.id,
         token_hash=token_hash(raw),
-        expires_at=utcnow()+timedelta(minutes=VERIFY_MINUTES),
+        expires_at=now+timedelta(minutes=VERIFY_MINUTES),
+        created_at=now,
     )
     db.add(row)
     db.commit()
@@ -37,17 +63,12 @@ def consume_email_verification(db: Session,raw_token: str):
         raise ValueError('INVALID_VERIFICATION_TOKEN')
     user.email_verified=True
     user.email_verified_at=now
-    row.used_at=now
-    db.commit()
-    db.refresh(user)
-    return user
-
-
-def mark_existing_email_verified(db: Session,user: User):
-    if user.email_verified:
-        return user
-    user.email_verified=True
-    user.email_verified_at=utcnow()
+    rows=db.scalars(select(EmailVerificationToken).where(
+        EmailVerificationToken.user_id==user.id,
+        EmailVerificationToken.used_at.is_(None),
+    )).all()
+    for token in rows:
+        token.used_at=now
     db.commit()
     db.refresh(user)
     return user
