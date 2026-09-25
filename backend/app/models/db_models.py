@@ -301,3 +301,19 @@ class RecommendationExclusionLog(Base):
     details_json: Mapped[str] = mapped_column(Text, default='[]')
     context_json: Mapped[str] = mapped_column(Text, default='{}')
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class RecommendationDecisionLog(Base):
+    __tablename__ = 'recommendation_decision_logs'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    food_id: Mapped[str] = mapped_column(String(64), index=True)
+    rank_position: Mapped[int] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(String(24), index=True)
+    score_wazen: Mapped[float] = mapped_column(Float)
+    scores_json: Mapped[str] = mapped_column(Text, default='{}')
+    reasons_json: Mapped[str] = mapped_column(Text, default='[]')
+    warnings_json: Mapped[str] = mapped_column(Text, default='[]')
+    context_json: Mapped[str] = mapped_column(Text, default='{}')
+    engine_version: Mapped[str] = mapped_column(String(20), default='v1')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
