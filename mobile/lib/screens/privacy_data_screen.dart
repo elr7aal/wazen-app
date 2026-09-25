@@ -62,6 +62,7 @@ class _PrivacyDataScreenState extends State<PrivacyDataScreen>{
               TextField(
                 controller:password,
                 obscureText:true,
+                onChanged:(_)=>setLocal((){}),
                 decoration:const InputDecoration(labelText:'كلمة المرور'),
               ),
               const SizedBox(height:12),
