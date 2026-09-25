@@ -12,9 +12,9 @@ from app.models.db_models import AuthRateLimit
 
 WINDOW_SECONDS=max(60,int(os.getenv('WAZEN_AUTH_RATE_WINDOW_SECONDS','900')))
 LOGIN_EMAIL_LIMIT=max(3,int(os.getenv('WAZEN_LOGIN_EMAIL_LIMIT','5')))
-LOGIN_IP_LIMIT=max(5,int(os.getenv('WAZEN_LOGIN_IP_LIMIT','20')))
+LOGIN_IP_LIMIT=max(20,int(os.getenv('WAZEN_LOGIN_IP_LIMIT','60')))
 RESET_EMAIL_LIMIT=max(2,int(os.getenv('WAZEN_RESET_EMAIL_LIMIT','5')))
-RESET_IP_LIMIT=max(5,int(os.getenv('WAZEN_RESET_IP_LIMIT','20')))
+RESET_IP_LIMIT=max(20,int(os.getenv('WAZEN_RESET_IP_LIMIT','60')))
 BLOCK_SECONDS=max(60,int(os.getenv('WAZEN_AUTH_BLOCK_SECONDS','900')))
 RETENTION_HOURS=max(1,int(os.getenv('WAZEN_AUTH_RATE_RETENTION_HOURS','48')))
 
