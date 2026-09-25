@@ -216,7 +216,8 @@ class WazenApi {
     return Map<String,dynamic>.from(_unwrap(r));
   }
   Future<List<RecommendationItem>> goldenFlow(String craving) async {
-    final r = await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/golden-flow'), headers: _headers, body: jsonEncode({
+    final key=_newIdempotencyKey('golden');
+    final r = await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/golden-flow'), headers: _writeHeaders(key), body: jsonEncode({
       'craving_text': craving,
       'meal_type': 'DINNER',
       'allow_modifications': true,
@@ -564,9 +565,10 @@ class WazenApi {
   }
 
   Future<DailyState> addActivityCredit(double caloriesCredit,{String source='MANUAL',String? note}) async {
+    final key=_newIdempotencyKey('activity');
     final r=await _withAuthRetry(()=>http.post(
       Uri.parse('$baseUrl/activity-log'),
-      headers:_headers,
+      headers:_writeHeaders(key),
       body:jsonEncode({'calories_credit':caloriesCredit,'source':source,'note':note}),
     ));
     final data=Map<String,dynamic>.from(_unwrap(r));
