@@ -151,7 +151,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             'target_fiber_g': p.target_fiber_g,
             'sodium_max_mg': p.sodium_max_mg, 'severe_allergens': p.severe_allergens(),
             'date_of_birth': p.date_of_birth.isoformat() if p.date_of_birth else None,
-            'gender': p.gender, 'food_preferences': p.food_preferences(),
+            'gender': p.gender, 'condition_context': p.condition_context(), 'food_preferences': p.food_preferences(),
             'disliked_foods': p.disliked_foods(), 'onboarding_complete': p.onboarding_complete,
         }
     })
@@ -165,6 +165,8 @@ def update_me(req: ProfileUpdateRequest, user: User = Depends(get_current_user),
         user.first_name = data.pop('first_name')
     if 'severe_allergens' in data:
         p.severe_allergens_csv = '|'.join(sorted({x.upper() for x in data.pop('severe_allergens')}))
+    if 'condition_context' in data:
+        p.condition_context_csv = '|'.join(sorted({x.strip().upper() for x in data.pop('condition_context') if x.strip()}))
     if 'food_preferences' in data:
         p.food_preferences_csv = '|'.join(sorted({x.strip() for x in data.pop('food_preferences') if x.strip()}))
     if 'disliked_foods' in data:
@@ -202,6 +204,7 @@ def complete_onboarding(req: OnboardingCompleteRequest, user: User = Depends(get
     p.activity_level = req.activity_level
     p.daily_budget = req.daily_budget
     p.severe_allergens_csv = '|'.join(sorted({x.upper() for x in req.severe_allergens}))
+    p.condition_context_csv = '|'.join(sorted({x.strip().upper() for x in req.condition_context if x.strip()}))
     p.food_preferences_csv = '|'.join(sorted({x.strip() for x in req.food_preferences if x.strip()}))
     p.disliked_foods_csv = '|'.join(sorted({x.strip() for x in req.disliked_foods if x.strip()}))
     p.target_calories = targets['target_calories']
@@ -246,6 +249,7 @@ def recalculate_plan(req: PlanRecalculateRequest, user: User = Depends(get_curre
         activity_level=p.activity_level,
         daily_budget=p.daily_budget,
         severe_allergens=p.severe_allergens(),
+        condition_context=p.condition_context(),
         food_preferences=p.food_preferences(),
         disliked_foods=p.disliked_foods(),
     )
