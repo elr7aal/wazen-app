@@ -26,6 +26,7 @@ class WazenApi {
 
   String? token;
   String? refreshToken;
+  int _idempotencyCounter=0;
 
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -66,6 +67,16 @@ class WazenApi {
         'Content-Type': 'application/json',
         if (token != null) 'Authorization': 'Bearer $token',
       };
+
+  String _newIdempotencyKey(String action){
+    _idempotencyCounter++;
+    return 'mobile-$action-${DateTime.now().microsecondsSinceEpoch}-$_idempotencyCounter';
+  }
+
+  Map<String,String> _writeHeaders(String key)=>{
+    ..._headers,
+    'Idempotency-Key':key,
+  };
 
 
   Future<bool>? _refreshInFlight;
@@ -223,7 +234,8 @@ class WazenApi {
   }
 
   Future<DailyState> logFromCatalog(String foodId, {String mealType = 'DINNER', double quantity = 1}) async {
-    final r = await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/from-catalog'), headers: _headers, body: jsonEncode({
+    final key=_newIdempotencyKey('catalog');
+    final r = await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/from-catalog'), headers: _writeHeaders(key), body: jsonEncode({
       'food_id': foodId,
       'meal_type': mealType,
       'quantity': quantity,
@@ -252,7 +264,8 @@ class WazenApi {
   }
 
   Future<DailyState> logModifiedFromCatalog(String foodId,List<String> components,{String mealType='DINNER',double quantity=1}) async {
-    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/from-modified-catalog'),headers:_headers,body:jsonEncode({
+    final key=_newIdempotencyKey('modified');
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/from-modified-catalog'),headers:_writeHeaders(key),body:jsonEncode({
       'food_id':foodId,'meal_type':mealType,'quantity':quantity,'included_components':components,
     })));
     final data=Map<String,dynamic>.from(_unwrap(r));
@@ -515,7 +528,8 @@ class WazenApi {
 
 
   Future<FoodLogDay> duplicateFoodLog(String logId) async {
-    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/$logId/duplicate'),headers:_headers));
+    final key=_newIdempotencyKey('duplicate');
+    final r=await _withAuthRetry(()=>http.post(Uri.parse('$baseUrl/food-log/$logId/duplicate'),headers:_writeHeaders(key)));
     _unwrap(r);
     return foodLogToday();
   }
@@ -533,9 +547,10 @@ class WazenApi {
   }
 
   Future<FoodLogDay> logFavoriteMeal(String favoriteId,{String? mealType}) async {
+    final key=_newIdempotencyKey('favorite');
     final r=await _withAuthRetry(()=>http.post(
       Uri.parse('$baseUrl/food-log/favorites/$favoriteId/log'),
-      headers:_headers,
+      headers:_writeHeaders(key),
       body:jsonEncode({'meal_type':mealType}),
     ));
     _unwrap(r);
