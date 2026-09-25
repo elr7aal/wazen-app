@@ -23,9 +23,9 @@ def _register(email=None):
 
 
 def _admin_headers():
-    os.environ['WAZEN_ADMIN_KEY']='security-admin-key'
+    admin_key=os.environ.get('WAZEN_ADMIN_KEY','test-admin-key')
     return {
-        'X-WAZEN-ADMIN-KEY':'security-admin-key',
+        'X-WAZEN-ADMIN-KEY':admin_key,
         'X-WAZEN-ADMIN-ACTOR':'security-qa',
     }
 
