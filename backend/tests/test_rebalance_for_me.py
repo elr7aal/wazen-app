@@ -48,3 +48,28 @@ def test_rebalance_after_modified_meal_reads_modified_snapshot():
     assert r.status_code == 200
     d = r.json()['data']
     assert round(d['daily_state']['remaining_calories'],1) == 584.3
+
+
+def test_rebalance_over_target_preserves_choice_and_returns_only_lighter_options():
+    h = reg('rebalance-over@example.com')
+    client.patch('/api/v1/users/me', headers=h, json={
+        'target_calories': 500, 'target_protein_g': 80,
+        'target_carbs_g': 100, 'target_fat_g': 40
+    })
+    r = client.post('/api/v1/food-log/from-catalog', headers=h, json={
+        'food_id': 'KFC-AE-014', 'meal_type': 'DINNER', 'quantity': 1
+    })
+    assert r.status_code == 200
+    assert r.json()['data']['daily_state']['remaining_calories'] == 0
+
+    r = client.get('/api/v1/rebalance/for-me', headers=h)
+    assert r.status_code == 200
+    d = r.json()['data']
+    assert d['user_choice_preserved'] is True
+    assert d['strategy'] == 'LIGHTER_NEXT_OPTIONS'
+    assert d['recommendation_calorie_ceiling'] == 250
+    assert 'اختيارك محفوظ' in d['message']
+    assert all(
+        x['nutrition']['calories'] <= d['recommendation_calorie_ceiling'] * 1.15
+        for x in d['next_options']
+    )
