@@ -7,6 +7,7 @@ import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/startup_gate.dart';
 import 'screens/reset_password_screen.dart';
+import 'screens/verify_email_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,9 +44,15 @@ class WazenApp extends StatelessWidget {
             child: child ?? const SizedBox.shrink(),
           ),
           home: Builder(builder:(_){
-            final resetToken=Uri.base.queryParameters['token'];
-            if(resetToken!=null&&resetToken.trim().isNotEmpty){
-              return ResetPasswordScreen(token:resetToken.trim());
+            final token=Uri.base.queryParameters['token'];
+            final path=Uri.base.path.toLowerCase();
+            if(token!=null&&token.trim().isNotEmpty){
+              if(path.contains('verify-email')){
+                return VerifyEmailScreen(token:token.trim());
+              }
+              if(path.contains('reset-password')){
+                return ResetPasswordScreen(token:token.trim());
+              }
             }
             return const StartupGate();
           }),
