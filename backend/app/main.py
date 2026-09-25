@@ -662,6 +662,7 @@ def recommendations_for_me(req: UserRecommendationRequest, user: User = Depends(
         vendor=req.vendor,
         category=req.category,
         max_calories=req.max_calories,
+        min_protein_g=req.min_protein_g,
         budget_max=req.budget_max,
         allow_modifications=req.allow_modifications,
     ))
