@@ -45,6 +45,7 @@ from app.services.vision_review import build_vision_review
 from app.services.craving_parser import parse_craving_text
 from app.services.idempotency import begin_idempotent, finish_idempotent, abandon_idempotent
 from app.services.privacy import export_user_data, delete_user_data
+from app.services.source_quality import catalog_quality_report
 
 _runtime_config = validate_runtime_config()
 Base.metadata.create_all(bind=engine)
@@ -52,7 +53,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='2.2.0')
+app = FastAPI(title='WAZEN API', version='2.3.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,7 +99,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.2.0', **safe_runtime_summary(_runtime_config)})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '2.3.0', **safe_runtime_summary(_runtime_config)})
 
 
 @app.get('/api/v1/readiness')
@@ -1278,6 +1279,15 @@ def admin_import_foods(
         raise HTTPException(status_code=422, detail='Unsupported import format')
     summary, checked = import_foods(db, rows, req.dry_run, actor)
     return envelope({'summary': summary, 'rows': checked})
+
+
+@app.get('/api/v1/admin/data-quality')
+def admin_data_quality(
+    limit: int = 100,
+    actor: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return envelope(catalog_quality_report(db,limit))
 
 
 @app.get('/api/v1/admin/audit')
