@@ -21,6 +21,7 @@ def test_public_capabilities_are_safe_and_truthful_by_default():
         'WAZEN_SMTP_HOST':'',
         'WAZEN_SMTP_FROM':'',
         'WAZEN_PASSWORD_RESET_URL_BASE':'',
+        'WAZEN_EMAIL_VERIFY_URL_BASE':'',
         'OPENAI_API_KEY':'',
     }
     with patch.dict(os.environ,env,clear=False):
@@ -31,6 +32,7 @@ def test_public_capabilities_are_safe_and_truthful_by_default():
     assert data['auth']['apple']['implemented'] is False
     assert data['auth']['google']['implemented'] is False
     assert data['auth']['mobile_otp']['implemented'] is False
+    assert data['email_verification']['available'] is False
     assert data['password_reset_email']['available'] is False
     assert data['vision']['available'] is False
 
@@ -43,6 +45,7 @@ def test_capabilities_reflect_configured_email_and_vision_without_leaking_secret
         'WAZEN_SMTP_PORT':'587',
         'WAZEN_SMTP_FROM':'no-reply@wazen.test',
         'WAZEN_PASSWORD_RESET_URL_BASE':'https://app.wazen.test/reset-password',
+        'WAZEN_EMAIL_VERIFY_URL_BASE':'https://app.wazen.test/verify-email',
         'WAZEN_SMTP_USERNAME':'mailer',
         'WAZEN_SMTP_PASSWORD':smtp_password,
         'OPENAI_API_KEY':api_key,
@@ -53,6 +56,7 @@ def test_capabilities_reflect_configured_email_and_vision_without_leaking_secret
 
     assert r.status_code==200
     data=r.json()['data']
+    assert data['email_verification']['available'] is True
     assert data['password_reset_email']['available'] is True
     assert data['vision']['available'] is True
     raw=json.dumps(r.json())+json.dumps(admin.json())
@@ -74,6 +78,7 @@ def test_admin_integration_summary_lists_only_real_remaining_actions():
     assert r.status_code==200
     data=r.json()['data']
     codes={x['code'] for x in data['required_actions']}
+    assert 'CONFIGURE_EMAIL_VERIFICATION' in codes
     assert 'CONFIGURE_PASSWORD_RESET_EMAIL' in codes
     assert 'CONFIGURE_VISION_PROVIDER' in codes
     assert 'IMPLEMENT_APPLE_SIGN_IN' in codes
