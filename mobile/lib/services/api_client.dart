@@ -622,4 +622,22 @@ class WazenApi {
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
+
+  Future<void> verifyEmail(String verificationToken) async {
+    final r=await http.post(
+      Uri.parse('$baseUrl/auth/verify-email'),
+      headers:{'Content-Type':'application/json'},
+      body:jsonEncode({'token':verificationToken}),
+    );
+    _unwrap(r);
+  }
+
+  Future<Map<String,dynamic>> resendEmailVerification() async {
+    final r=await _withAuthRetry(()=>http.post(
+      Uri.parse('$baseUrl/auth/resend-verification'),
+      headers:_headers,
+    ));
+    return Map<String,dynamic>.from(_unwrap(r));
+  }
+
 }
