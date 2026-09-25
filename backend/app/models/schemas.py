@@ -270,3 +270,7 @@ class ActivityLogCreateRequest(BaseModel):
 class DeleteAccountRequest(BaseModel):
     password: str = Field(min_length=1)
     confirm: Literal['DELETE']
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=20)
