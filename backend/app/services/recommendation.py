@@ -4,7 +4,7 @@ from app.models.schemas import RecommendationRequest
 from app.services.catalog import query_foods
 from app.services.daily_state import calculate_daily_state
 from app.services.health_limits import evaluate_food_health_limits
-from app.services.source_quality import primary_source, source_freshness
+from app.services.source_quality import primary_source, source_freshness, source_quality_score
 
 
 def _norm(v: str | None) -> str | None:
@@ -104,7 +104,10 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
         if req.budget_max is not None and item.price is not None:
             price_score=100.0 if item.price<=req.budget_max else max(0.0,100.0-(item.price-req.budget_max)/max(1,req.budget_max)*100)
             if item.price>req.budget_max: warnings.append('OVER_BUDGET')
-        score=nutrition_score*.30+health_score*.20+preference_score*.20+price_score*.10+80*.10+100*.05+75*.05
+        source=primary_source(item)
+        freshness=source_freshness(source)
+        source_score=source_quality_score(source,freshness)
+        score=nutrition_score*.30+health_score*.20+preference_score*.20+price_score*.10+80*.10+100*.05+source_score*.05
 
         calorie_limit=hard_max_calories if hard_max_calories is not None else daily.remaining_calories
         if n.calories<=calorie_limit: decision='ELIGIBLE'
@@ -121,8 +124,6 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
         if protein>=daily.protein_gap_g and daily.protein_gap_g>0: reasons.append('Covers the remaining protein gap')
         elif daily.protein_gap_g>0: reasons.append('Contributes to the remaining protein target')
 
-        source=primary_source(item)
-        freshness=source_freshness(source)
         if freshness['status']=='STALE':
             warnings.append('SOURCE_STALE')
         elif freshness['status']=='UNKNOWN':
@@ -134,7 +135,7 @@ def recommend_now(db: Session, req: RecommendationRequest) -> Dict[str, Any]:
             'nutrition':{'calories':n.calories,'protein_g':n.protein_g,'carbs_g':n.carbs_g,'fat_g':n.fat_g,'sodium_mg':n.sodium_mg},
             'price':item.price,'currency':item.currency,'source_confidence':source.confidence_level if source else None,
             'source_freshness':freshness['status'],'source_age_days':freshness['age_days'],
-            'scores':{'nutrition':round(nutrition_score,1),'health':round(health_score,1),'preference':round(preference_score,1),'wazen':round(score,1)},
+            'scores':{'nutrition':round(nutrition_score,1),'health':round(health_score,1),'preference':round(preference_score,1),'source_quality':round(source_score,1),'wazen':round(score,1)},
             'decision':decision,'reasons':reasons,'warnings':warnings,'can_modify':req.allow_modifications and decision in {'NEAR_MATCH','MAKE_IT_FIT'}
         })
     priority={'ELIGIBLE':0,'NEAR_MATCH':1,'MAKE_IT_FIT':2,'OVER_TARGET':3}
