@@ -17,6 +17,8 @@ class User(Base):
     first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     language: Mapped[str] = mapped_column(String(8), default='ar')
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     profile: Mapped['UserProfile | None'] = relationship(back_populates='user', uselist=False, cascade='all, delete-orphan')
     logs: Mapped[list['FoodLog']] = relationship(back_populates='user', cascade='all, delete-orphan')
@@ -377,4 +379,14 @@ class OperationalEvent(Base):
     duration_ms: Mapped[float] = mapped_column(Float)
     request_id: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     details_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = 'email_verification_tokens'
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True)
