@@ -6,6 +6,7 @@ import 'services/app_preferences.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/startup_gate.dart';
+import 'screens/reset_password_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +42,13 @@ class WazenApp extends StatelessWidget {
             textDirection: rtl ? TextDirection.rtl : TextDirection.ltr,
             child: child ?? const SizedBox.shrink(),
           ),
-          home: const StartupGate(),
+          home: Builder(builder:(_){
+            final resetToken=Uri.base.queryParameters['token'];
+            if(resetToken!=null&&resetToken.trim().isNotEmpty){
+              return ResetPasswordScreen(token:resetToken.trim());
+            }
+            return const StartupGate();
+          }),
         );
       },
     );
