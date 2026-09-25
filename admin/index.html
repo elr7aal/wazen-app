@@ -62,6 +62,19 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 </section>
 
 
+
+<section class="card">
+  <div class="row"><h2 class="grow">Operations</h2><button onclick="loadOperations()">تحديث الحالة</button></div>
+  <div id="opsStatus" class="row muted">لم يتم تحميل الحالة بعد.</div>
+  <div id="opsAlerts" style="margin-top:10px"></div>
+  <div style="overflow:auto;margin-top:12px">
+    <table>
+      <thead><tr><th>الوقت</th><th>النوع</th><th>المسار</th><th>Status</th><th>المدة</th><th>Request ID</th></tr></thead>
+      <tbody id="opsEvents"><tr><td colspan="6">لم يتم التحميل بعد.</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
 <section class="card">
   <div class="row">
     <h2 class="grow">Security Events</h2>
@@ -168,6 +181,37 @@ async function loadQuality(){
   }
 }
 
+
+
+async function loadOperations(){
+  try{
+    const s=await api('/admin/operations/summary');
+    const m=s.metrics||{};
+    $('opsStatus').innerHTML=[
+      'الحالة: '+(s.status||'—'),
+      'Readiness: '+((s.readiness&&s.readiness.ready)?'READY':'NOT READY'),
+      '5xx آخر ساعة: '+(m.http_5xx_last_hour??0),
+      'Slow آخر ساعة: '+(m.slow_requests_last_hour??0),
+      'Security blocks: '+(m.security_blocks_last_hour??0),
+      'Auth blocks نشطة: '+(m.active_auth_blocks??0),
+      'Pending idempotency: '+(m.pending_idempotency??0),
+      'Stale idempotency: '+(m.stale_idempotency??0)
+    ].map(x=>'<span class="badge">'+x+'</span>').join(' ');
+    $('opsAlerts').innerHTML=(s.alerts||[]).map(a=>'<div class="badge">'+a.severity+' • '+a.code+' • '+a.message+'</div>').join(' ')||'<span class="badge">لا توجد تنبيهات تشغيلية</span>';
+
+    const d=await api('/admin/operational-events?limit=100');
+    $('opsEvents').innerHTML=(d.items||[]).map(x=>`<tr>
+      <td>${x.created_at||'—'}</td>
+      <td><span class="badge">${x.event_type||'—'}</span></td>
+      <td>${x.method||''} ${x.path||'—'}</td>
+      <td>${x.status_code??'—'}</td>
+      <td>${x.duration_ms==null?'—':x.duration_ms+' ms'}</td>
+      <td>${x.request_id||'—'}</td>
+    </tr>`).join('')||'<tr><td colspan="6">لا توجد أحداث تشغيلية مسجلة.</td></tr>';
+  }catch(e){
+    $('opsStatus').textContent=e.message;
+  }
+}
 
 async function loadSecurityEvents(){
   try{
