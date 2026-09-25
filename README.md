@@ -435,3 +435,12 @@ Unified Add Food flow:
 - Operational events have configurable retention and a dedicated Alembic revision `0005_operational_events`.
 - Backend v57 baseline: **164 passing tests**.
 - Docker migration/readiness smoke: **passing**.
+
+
+## v58 — PostgreSQL Backup & Restore Drill
+- CI now starts a real PostgreSQL 17 instance and runs WAZEN migrations + catalog seed against it.
+- The drill creates a custom-format `pg_dump`, restores it into a clean database and verifies food-row counts plus Alembic revision parity.
+- A second WAZEN container starts against the restored database and must pass `/api/v1/readiness`.
+- Added `docs/POSTGRES_BACKUP_RESTORE.md` with a production/staging backup and restore runbook.
+- This validates application/schema recovery mechanics; managed-provider backup retention and a restore drill against the actual production PostgreSQL service remain deployment responsibilities.
+- PostgreSQL backup/restore CI drill: **passing**.
