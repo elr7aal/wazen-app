@@ -31,7 +31,7 @@ from app.services.onboarding import calculate_targets
 from app.services.profile_insights import profile_insights
 from app.services.admin_data import list_admin_foods, set_review, parse_import_payload, import_foods, edit_food, merge_foods
 from app.services.plan_progress import get_or_generate_week, generate_week, rebalance_day as rebalance_plan_day, progress_summary, record_weight, week_start_for
-from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset
+from app.services.auth_sessions import issue_session, rotate_session, revoke_session, revoke_all_sessions, create_password_reset, consume_password_reset, list_active_sessions
 from app.services.goal_history import add_goal_snapshot, list_goal_history
 from app.services.preferences import set_preference, list_preferences
 from app.services.health_limits import set_health_limit, list_health_limits
@@ -45,7 +45,7 @@ Base.metadata.create_all(bind=engine)
 with SessionLocal() as _seed_db:
     ensure_catalog_seeded(_seed_db)
 
-app = FastAPI(title='WAZEN API', version='1.7.0')
+app = FastAPI(title='WAZEN API', version='1.8.0')
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,7 +63,7 @@ def envelope(data=None, error=None, meta=None):
 
 @app.get('/api/v1/health')
 def health():
-    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.7.0'})
+    return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.8.0'})
 
 
 # -------- Authentication --------
@@ -109,6 +109,15 @@ def logout_auth(
     else:
         revoked = 1 if revoke_session(db, req.refresh_token, user.id) else 0
     return envelope({'logged_out': True, 'revoked_sessions': revoked})
+
+
+@app.get('/api/v1/auth/sessions')
+def active_auth_sessions(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items=list_active_sessions(db,user.id)
+    return envelope({'items':items,'count':len(items)})
 
 
 @app.post('/api/v1/auth/forgot-password')
