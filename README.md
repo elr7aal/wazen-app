@@ -392,3 +392,13 @@ Unified Add Food flow:
 - Admin UI includes a live data-quality dashboard.
 - Backend v53 baseline: **146 passing tests**.
 - Flutter validation and web build: **passing**.
+
+
+## v54 — Source-aware Ranking
+- Source quality is a bounded 5% recommendation signal based on confidence + verification freshness.
+- FRESH/VERIFIED items get a small tie-breaking advantage over otherwise comparable stale/unknown-source items.
+- Source quality cannot override severe-allergy, NEVER_SHOW or HARD health-limit exclusions.
+- Recommendation decision priority remains ELIGIBLE → NEAR_MATCH → MAKE_IT_FIT → OVER_TARGET before WAZEN score ordering.
+- Recommendation audit scores now include `source_quality`.
+- Backend v54 baseline: **148 passing tests**.
+- Docker migration/readiness smoke: **passing**.
