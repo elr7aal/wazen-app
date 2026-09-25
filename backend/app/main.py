@@ -1,9 +1,10 @@
 import re
 import os
 import secrets
+from uuid import uuid4
 from typing import Optional, Any, Literal
 from datetime import date
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -38,6 +39,7 @@ from app.services.health_limits import set_health_limit, list_health_limits
 from app.services.natural_language import parse_natural_food_text
 from app.services.recommendation_audit import list_exclusions, list_decisions
 from app.config import validate_runtime_config, safe_runtime_summary
+from app.services.system_health import readiness_status
 from app.services.vision_review import build_vision_review
 from app.services.craving_parser import parse_craving_text
 
@@ -58,6 +60,14 @@ app.add_middleware(
 )
 
 
+@app.middleware('http')
+async def request_id_middleware(request: Request, call_next):
+    request_id=request.headers.get('X-Request-ID') or str(uuid4())
+    response=await call_next(request)
+    response.headers['X-Request-ID']=request_id
+    return response
+
+
 
 def envelope(data=None, error=None, meta=None):
     return {'success': error is None, 'data': data, 'error': error, 'meta': meta or {}}
@@ -66,6 +76,14 @@ def envelope(data=None, error=None, meta=None):
 @app.get('/api/v1/health')
 def health():
     return envelope({'status': 'ok', 'service': 'wazen-api', 'version': '1.8.0', **safe_runtime_summary(_runtime_config)})
+
+
+@app.get('/api/v1/readiness')
+def readiness(response: Response, db: Session = Depends(get_db)):
+    data=readiness_status(db,_runtime_config)
+    if not data['ready']:
+        response.status_code=503
+    return envelope(data)
 
 
 # -------- Authentication --------
