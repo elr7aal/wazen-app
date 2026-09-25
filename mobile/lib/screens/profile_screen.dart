@@ -231,6 +231,45 @@ class _ProfileScreenState extends State<ProfileScreen>{
         const SizedBox(height:18),
         _section('أمان الحساب',[
           Row(children:[
+            Icon(
+              user?['email_verified']==true?Icons.mark_email_read_rounded:Icons.mark_email_unread_outlined,
+              color:user?['email_verified']==true?Colors.green:Colors.orange,
+            ),
+            const SizedBox(width:10),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(
+                user?['email_verified']==true?'البريد الإلكتروني موثّق':'البريد الإلكتروني غير موثّق',
+                style:const TextStyle(fontWeight:FontWeight.w800),
+              ),
+              Text(
+                (user?['email']??'').toString(),
+                style:const TextStyle(fontSize:12,color:Colors.black54),
+              ),
+            ])),
+          ]),
+          if(user?['email_verified']!=true)...[
+            const SizedBox(height:8),
+            OutlinedButton.icon(
+              onPressed:()async{
+                try{
+                  final data=await WazenApi.instance.resendEmailVerification();
+                  if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content:Text(
+                      data['delivery']=='SENT'
+                        ?'تم إرسال رابط التحقق إلى بريدك.'
+                        :'تم تسجيل طلب التحقق. خدمة البريد قد لا تكون مفعلة في هذه البيئة.',
+                    ),
+                  ));
+                }catch(e){
+                  if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));
+                }
+              },
+              icon:const Icon(Icons.forward_to_inbox_outlined),
+              label:const Text('إعادة إرسال رابط التحقق'),
+            ),
+          ],
+          const Divider(height:24),
+          Row(children:[
             const Icon(Icons.devices_other_rounded,color:WazenTheme.greenDark),
             const SizedBox(width:10),
             Expanded(child:Text('الجلسات النشطة: ${activeSessions.length}',style:const TextStyle(fontWeight:FontWeight.w800))),
