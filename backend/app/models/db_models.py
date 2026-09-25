@@ -41,6 +41,7 @@ class UserProfile(Base):
     target_fiber_g: Mapped[float | None] = mapped_column(Float, nullable=True, default=30)
     sodium_max_mg: Mapped[float | None] = mapped_column(Float, nullable=True)
     severe_allergens_csv: Mapped[str] = mapped_column(Text, default='')
+    condition_context_csv: Mapped[str] = mapped_column(Text, default='')
     food_preferences_csv: Mapped[str] = mapped_column(Text, default='')
     disliked_foods_csv: Mapped[str] = mapped_column(Text, default='')
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -48,6 +49,9 @@ class UserProfile(Base):
 
     def severe_allergens(self) -> list[str]:
         return [x for x in self.severe_allergens_csv.split('|') if x]
+
+    def condition_context(self) -> list[str]:
+        return [x for x in self.condition_context_csv.split('|') if x]
 
     def food_preferences(self) -> list[str]:
         return [x for x in self.food_preferences_csv.split('|') if x]
