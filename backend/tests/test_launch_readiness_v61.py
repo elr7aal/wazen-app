@@ -38,6 +38,7 @@ def _provider_env():
         'WAZEN_SMTP_PORT':'587',
         'WAZEN_SMTP_FROM':'no-reply@wazen.example',
         'WAZEN_PASSWORD_RESET_URL_BASE':'https://app.wazen.example/reset-password',
+        'WAZEN_EMAIL_VERIFY_URL_BASE':'https://app.wazen.example/verify-email',
         'OPENAI_API_KEY':'test-openai-key',
     }
 
@@ -67,6 +68,7 @@ def test_launch_gate_blocks_unsafe_or_incomplete_environment():
         'WAZEN_SMTP_HOST':'',
         'WAZEN_SMTP_FROM':'',
         'WAZEN_PASSWORD_RESET_URL_BASE':'',
+        'WAZEN_EMAIL_VERIFY_URL_BASE':'',
         'OPENAI_API_KEY':'',
     }
     readiness={**_ready(),'ready':False,'errors':['database:down']}
@@ -81,6 +83,7 @@ def test_launch_gate_blocks_unsafe_or_incomplete_environment():
     assert 'EXPLICIT_CORS_REQUIRED' in codes
     assert 'STRONG_JWT_SECRET_REQUIRED' in codes
     assert 'STRONG_ADMIN_KEY_REQUIRED' in codes
+    assert 'EMAIL_VERIFICATION_REQUIRED' in codes
     assert 'PASSWORD_RESET_EMAIL_REQUIRED' in codes
 
 
@@ -135,3 +138,12 @@ def test_admin_launch_readiness_returns_structured_gate():
     assert isinstance(data['blockers'],list)
     assert isinstance(data['warnings'],list)
     assert isinstance(data['manual_checks'],list)
+
+
+
+def test_launch_gate_requires_https_email_verification_url():
+    env={**_provider_env(),'WAZEN_EMAIL_VERIFY_URL_BASE':'http://app.wazen.example/verify-email'}
+    with patch.dict(os.environ,env,clear=False):
+        data=production_launch_gate(_production_config(),_ready())
+    codes={x['code'] for x in data['blockers']}
+    assert 'HTTPS_VERIFY_URL_REQUIRED' in codes
