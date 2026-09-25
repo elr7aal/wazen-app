@@ -1,5 +1,5 @@
 from app.config import RuntimeConfig, safe_runtime_summary
-from app.services.email_delivery import password_reset_delivery_available
+from app.services.email_delivery import password_reset_delivery_available, email_verification_delivery_available
 from app.services.vision import provider_configured as vision_provider_configured
 
 
@@ -27,6 +27,11 @@ def integration_capabilities(config: RuntimeConfig) -> dict:
                 'status': 'NOT_IMPLEMENTED',
             },
         },
+        'email_verification': {
+            'implemented': True,
+            'available': email_verification_delivery_available(),
+            'status': 'AVAILABLE' if email_verification_delivery_available() else 'NOT_CONFIGURED',
+        },
         'password_reset_email': {
             'implemented': True,
             'available': password_reset_delivery_available(),
@@ -44,6 +49,12 @@ def integration_capabilities(config: RuntimeConfig) -> dict:
 def integration_admin_summary(config: RuntimeConfig) -> dict:
     caps=integration_capabilities(config)
     actions=[]
+    if not caps['email_verification']['available']:
+        actions.append({
+            'code':'CONFIGURE_EMAIL_VERIFICATION',
+            'area':'email_verification',
+            'message':'Configure SMTP and WAZEN_EMAIL_VERIFY_URL_BASE before relying on email ownership verification in production.',
+        })
     if not caps['password_reset_email']['available']:
         actions.append({
             'code':'CONFIGURE_PASSWORD_RESET_EMAIL',
