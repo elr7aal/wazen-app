@@ -285,3 +285,58 @@ Unified Add Food flow:
 - Duplicate foods can be merged into a canonical record while preserving the source as MERGED.
 - Food-log, favorites, weekly-plan and recommendation references are remapped during merge.
 - Admin UI now exposes Edit and Merge actions in addition to review/import.
+
+## v36 — Official Alpha QA Gate
+- Added automated QA-001 through QA-010 from the engineering acceptance checklist.
+- Daily math, edit/delete, allergy filtering, craving parsing, Make It Fit, user override, missing sodium and source provenance are all enforced in CI.
+
+## v37 — Explicit Condition Context
+- Optional condition context is stored separately from nutrition limits.
+- Condition context alone never changes recommendations or creates medical limits.
+- Any effective nutrition restriction still requires an explicit Health Limit.
+
+## v38 — Session Security
+- Active authentication sessions can be listed.
+- Account UI shows active-session count.
+- “Logout all devices” revokes every active refresh session.
+
+## v39 — Database Migration Safety
+- Added Alembic migration framework.
+- Idempotent current-schema baseline supports fresh and older Alpha databases.
+- Known additive Alpha columns are reconciled safely.
+- Migration baseline is covered by automated tests.
+
+## v40 — Auth Acceptance Hardening
+- Registration and password reset enforce 8+ characters with uppercase, lowercase and numeric characters.
+- Expired access tokens are explicitly tested and rejected.
+
+## v41 — Production Configuration Guardrails
+- Production startup rejects default/short JWT secrets, wildcard CORS and SQLite.
+- Runtime health output exposes only safe environment/database-mode metadata.
+
+## v42 — Secure Mobile Token Storage
+- Access and refresh tokens moved out of SharedPreferences into secure storage.
+- Existing pre-v42 tokens are migrated once and deleted from legacy preferences.
+
+## v43 — Automatic Session Refresh
+- Authenticated mobile requests retry once after a single-flight refresh.
+- Concurrent 401s do not rotate the same refresh token multiple times.
+- Transient network failure during refresh does not erase the local session.
+
+## v44 — Recommendation Contract Alignment
+- Direct /recommendations/for-me requests now support min_protein_g consistently with Golden Flow.
+- Decision audit retains the protein constraint in request context.
+
+## v45 — Password UX Alignment
+- Registration screen explains the backend password policy and validates it before submission.
+
+## v46 — Migration-first Container Startup
+- Backend Docker startup runs alembic upgrade head before Uvicorn.
+- CI builds the Docker image and smoke-tests the migrated container.
+
+## v47 — Operational Readiness
+- Added /api/v1/readiness for database/catalog/migration checks.
+- Every HTTP response gets an X-Request-ID for request tracing.
+- Docker smoke test now validates readiness rather than liveness only.
+- Current backend baseline: **122 passing tests**.
+- Latest Flutter web validation: **passing**.
