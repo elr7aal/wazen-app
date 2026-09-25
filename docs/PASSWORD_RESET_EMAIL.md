@@ -23,6 +23,8 @@ Example reset URL base:
 https://app.example.com/reset-password
 ```
 
+The Flutter web client recognizes the `token` query parameter and opens the WAZEN reset-password completion screen. The configured URL must therefore resolve to the deployed WAZEN client (or another approved client that implements the same reset contract).
+
 The reset token is appended as a URL-encoded `token` query parameter.
 
 ## Enumeration safety
