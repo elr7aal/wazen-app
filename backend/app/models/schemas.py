@@ -1,6 +1,18 @@
 from typing import Optional, List, Literal, Dict
 from datetime import date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _strong_password(value: str) -> str:
+    if len(value) < 8:
+        raise ValueError('Password must be at least 8 characters')
+    if not any(ch.isupper() for ch in value):
+        raise ValueError('Password must include an uppercase letter')
+    if not any(ch.islower() for ch in value):
+        raise ValueError('Password must include a lowercase letter')
+    if not any(ch.isdigit() for ch in value):
+        raise ValueError('Password must include a number')
+    return value
 
 
 class DailyStateRequest(BaseModel):
@@ -77,6 +89,11 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8)
     first_name: Optional[str] = None
     language: str = 'ar'
+
+    @field_validator('password')
+    @classmethod
+    def password_policy(cls, value: str) -> str:
+        return _strong_password(value)
 
 
 class LoginRequest(BaseModel):
@@ -219,6 +236,11 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=20)
     new_password: str = Field(min_length=8)
+
+    @field_validator('new_password')
+    @classmethod
+    def password_policy(cls, value: str) -> str:
+        return _strong_password(value)
 
 
 class PreferenceSettingRequest(BaseModel):
