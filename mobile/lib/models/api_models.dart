@@ -63,6 +63,8 @@ class RecommendationItem {
   final List<String> warnings;
   final bool canModify;
   final String? sourceConfidence;
+  final String? sourceFreshness;
+  final int? sourceAgeDays;
 
   const RecommendationItem({
     required this.foodId,
@@ -79,6 +81,8 @@ class RecommendationItem {
     this.price,
     this.currency,
     this.sourceConfidence,
+    this.sourceFreshness,
+    this.sourceAgeDays,
   });
 
   factory RecommendationItem.fromJson(Map<String, dynamic> json) {
@@ -98,6 +102,8 @@ class RecommendationItem {
       warnings: ((json['warnings'] as List?) ?? const []).map((e) => e.toString()).toList(),
       canModify: json['can_modify'] == true,
       sourceConfidence: json['source_confidence'] as String?,
+      sourceFreshness: json['source_freshness'] as String?,
+      sourceAgeDays: (json['source_age_days'] as num?)?.toInt(),
     );
   }
 }
@@ -113,6 +119,8 @@ class FoodDetail {
   final String? sourceName;
   final String? sourceReference;
   final DateTime? sourceVerifiedAt;
+  final String? sourceFreshness;
+  final int? sourceAgeDays;
   final double? price;
   final String? currency;
 
@@ -127,6 +135,8 @@ class FoodDetail {
     this.sourceName,
     this.sourceReference,
     this.sourceVerifiedAt,
+    this.sourceFreshness,
+    this.sourceAgeDays,
     this.price,
     this.currency,
   });
@@ -142,6 +152,8 @@ class FoodDetail {
         sourceName: json['source_name'] as String?,
         sourceReference: json['source_reference'] as String?,
         sourceVerifiedAt: json['source_verified_at']==null?null:DateTime.tryParse(json['source_verified_at'].toString()),
+        sourceFreshness: json['source_freshness'] as String?,
+        sourceAgeDays: (json['source_age_days'] as num?)?.toInt(),
         price: (json['price'] as num?)?.toDouble(),
         currency: json['currency'] as String?,
       );
