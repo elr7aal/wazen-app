@@ -94,6 +94,45 @@ class _FoodDetailScreenState extends State<FoodDetailScreen> {
             _stat('المصدر', detail?.sourceConfidence ?? widget.item.sourceConfidence ?? '—'),
           ],
         ),
+        if(detail!=null)...[
+          const SizedBox(height:18),
+          const Text('مصدر البيانات',style:TextStyle(fontSize:18,fontWeight:FontWeight.w800)),
+          const SizedBox(height:8),
+          Container(
+            padding:const EdgeInsets.all(14),
+            decoration:BoxDecoration(
+              color:const Color(0xFFF6F7F3),
+              borderRadius:BorderRadius.circular(14),
+            ),
+            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(detail!.sourceName??'المصدر غير محدد',style:const TextStyle(fontWeight:FontWeight.w800)),
+              const SizedBox(height:4),
+              Text('الثقة: ${detail!.sourceConfidence??'غير محددة'}',style:const TextStyle(color:Colors.black54)),
+              const SizedBox(height:4),
+              Text(
+                detail!.sourceVerifiedAt==null
+                  ?'آخر تحقق: غير متوفر'
+                  :'آخر تحقق: ${detail!.sourceVerifiedAt!.year}-${detail!.sourceVerifiedAt!.month.toString().padLeft(2,'0')}-${detail!.sourceVerifiedAt!.day.toString().padLeft(2,'0')}',
+                style:const TextStyle(color:Colors.black54),
+              ),
+              if((detail!.sourceReference??'').isNotEmpty)...[
+                const SizedBox(height:4),
+                Text(
+                  detail!.sourceReference!,
+                  maxLines:2,
+                  overflow:TextOverflow.ellipsis,
+                  textDirection:TextDirection.ltr,
+                  style:const TextStyle(fontSize:11,color:Colors.black45),
+                ),
+              ],
+              const SizedBox(height:8),
+              const Text(
+                'أي قيمة غير متوفرة تظهر بعلامة — ولا يعاملها وازن كأنها صفر أو منخفضة.',
+                style:TextStyle(fontSize:11,color:Colors.black45,height:1.4),
+              ),
+            ]),
+          ),
+        ],
         if ((detail?.allergens ?? const []).isNotEmpty) ...[
           const SizedBox(height: 18),
           const Text('مسببات الحساسية المسجلة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
