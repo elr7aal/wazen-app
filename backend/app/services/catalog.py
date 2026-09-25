@@ -4,6 +4,7 @@ from pathlib import Path
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 from app.models.db_models import FoodItem, FoodNutrition, FoodAllergen, FoodDataSource, FoodModifier
+from app.services.source_quality import primary_source, source_freshness
 
 DATA_DIR = Path(__file__).resolve().parents[1] / 'data'
 SEED_FILE = DATA_DIR / 'catalog_seed_v5.json'
@@ -214,7 +215,8 @@ def query_foods(
 
 def serialize_food(item: FoodItem):
     n=item.nutrition
-    source=item.sources[0] if item.sources else None
+    source=primary_source(item)
+    freshness=source_freshness(source)
     return {
         'food_id':item.id, 'vendor':item.vendor_name, 'brand':item.brand_name,
         'name':item.name_en or item.name_ar, 'name_ar':item.name_ar, 'category':item.category,
@@ -231,4 +233,6 @@ def serialize_food(item: FoodItem):
         'source_name': source.source_name if source else None,
         'source_reference': source.source_reference if source else None,
         'source_verified_at': source.verified_at.isoformat() if source and source.verified_at else None,
+        'source_freshness': freshness['status'],
+        'source_age_days': freshness['age_days'],
     }
