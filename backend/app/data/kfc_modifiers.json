@@ -1,7 +1,0 @@
-[
-  {"id":"KFC-MOD-001","vendor":"KFC UAE","group":"DRINK","name":"Replace Regular Pepsi 453ml with Diet Pepsi 453ml","action":"REPLACE","calorie_delta":-197.3,"protein_delta_g":0,"carbs_delta_g":-52.0,"fat_delta_g":0,"sugar_delta_g":-52.0,"sodium_delta_mg":-3.2,"confidence":"VERIFIED"},
-  {"id":"KFC-MOD-002","vendor":"KFC UAE","group":"SIDE","name":"Medium Fries to Regular Fries","action":"SIZE_CHANGE","calorie_delta":-83.0,"protein_delta_g":-1.3,"carbs_delta_g":-12.9,"fat_delta_g":-3.2,"sugar_delta_g":0,"sodium_delta_mg":-40.2,"confidence":"VERIFIED"},
-  {"id":"KFC-MOD-003","vendor":"KFC UAE","group":"SIDE","name":"Large Fries to Regular Fries","action":"SIZE_CHANGE","calorie_delta":-166.0,"protein_delta_g":-2.7,"carbs_delta_g":-25.8,"fat_delta_g":-6.4,"sugar_delta_g":0,"sodium_delta_mg":-80.4,"confidence":"VERIFIED"},
-  {"id":"KFC-MOD-004","vendor":"KFC UAE","group":"SAUCE","name":"Remove Dynamite Sauce Dip Pot","action":"REMOVE","calorie_delta":-130.0,"protein_delta_g":-0.5,"carbs_delta_g":-2.0,"fat_delta_g":-12.5,"sugar_delta_g":-1.5,"sodium_delta_mg":-346.2,"confidence":"VERIFIED"},
-  {"id":"KFC-MOD-005","vendor":"KFC UAE","group":"SAUCE","name":"Remove Kentucky Ranch Sauce Dip Pot","action":"REMOVE","calorie_delta":-163.0,"protein_delta_g":-0.4,"carbs_delta_g":-2.8,"fat_delta_g":-16.8,"sugar_delta_g":-4.1,"sodium_delta_mg":-247.8,"confidence":"VERIFIED"}
-]

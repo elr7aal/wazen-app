@@ -1,9 +1,0 @@
-[
-  {"id":"KFC-AE-007","vendor":"KFC UAE","name":"Dynamite Burger","category":"BURGERS","calories":487.0,"protein_g":21.8,"carbs_g":78.9,"fat_g":10.5,"sodium_mg":1097.4,"allergens":["GLUTEN","EGG","MILK"],"available":true,"source_confidence":"VERIFIED"},
-  {"id":"KFC-AE-008","vendor":"KFC UAE","name":"Spicy Pepper Mayo Cruncher","category":"BURGERS","calories":573.0,"protein_g":25.3,"carbs_g":55.2,"fat_g":29.2,"sodium_mg":968.3,"allergens":["GLUTEN","EGG","MILK","MUSTARD"],"available":true,"source_confidence":"VERIFIED"},
-  {"id":"KFC-AE-009","vendor":"KFC UAE","name":"Original Pepper Mayo Cruncher","category":"BURGERS","calories":554.1,"protein_g":25.5,"carbs_g":57.6,"fat_g":24.6,"sodium_mg":928.0,"allergens":["GLUTEN","EGG","MILK","MUSTARD","SOY"],"available":true,"source_confidence":"VERIFIED"},
-  {"id":"KFC-AE-014","vendor":"KFC UAE","name":"Zinger Sandwich","category":"BURGERS","calories":613.0,"protein_g":31.5,"carbs_g":48.2,"fat_g":33.7,"sodium_mg":799.4,"allergens":["GLUTEN","EGG","MUSTARD","SESAME"],"available":true,"source_confidence":"VERIFIED"},
-  {"id":"KFC-AE-015","vendor":"KFC UAE","name":"Mighty Zinger","category":"BURGERS","calories":920.0,"protein_g":56.2,"carbs_g":64.4,"fat_g":50.1,"sodium_mg":766.1,"allergens":["GLUTEN","EGG","MUSTARD","SESAME"],"available":true,"source_confidence":"VERIFIED"},
-  {"id":"KFC-AE-016","vendor":"KFC UAE","name":"Chicken Fillet Sandwich","category":"BURGERS","calories":504.7,"protein_g":26.8,"carbs_g":64.9,"fat_g":17.0,"sodium_mg":982.5,"allergens":["GLUTEN","EGG","MUSTARD","MILK","SESAME","SOY"],"available":true,"source_confidence":"VERIFIED"},
-  {"id":"KFC-AE-019","vendor":"KFC UAE","name":"Supreme Zinger Sandwich","category":"BURGERS","calories":549.2,"protein_g":34.1,"carbs_g":50.9,"fat_g":25.1,"sodium_mg":1579.7,"allergens":["GLUTEN","EGG","MUSTARD","MILK","SOY"],"available":true,"source_confidence":"VERIFIED"}
-]
