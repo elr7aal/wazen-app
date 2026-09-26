@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/api_client.dart';
 import '../services/app_preferences.dart';
+import '../widgets/wazen_brand.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
 import 'verification_required_screen.dart';
@@ -143,25 +144,20 @@ class _AuthScreenState extends State<AuthScreen> {
       child:ConstrainedBox(
         constraints:const BoxConstraints(maxWidth:440),
         child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-          Container(
-            width:70,height:70,
-            alignment:Alignment.center,
-            decoration:BoxDecoration(color:WazenTheme.greenDark,borderRadius:BorderRadius.circular(22)),
-            child:const Icon(Icons.eco_rounded,color:Colors.white,size:40),
-          ),
-          const SizedBox(height:18),
+          const Align(alignment:AlignmentDirectional.centerStart,child:WazenWordmark()),
+          const SizedBox(height:28),
           Text(
             registerMode
               ?(arabic?'أنشئ حسابك':'Create your account')
               :(arabic?'أهلًا بعودتك':'Welcome back'),
-            style:const TextStyle(fontSize:30,fontWeight:FontWeight.w900),
+            style:Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height:6),
           Text(
             registerMode
               ?(arabic?'ابدأ رحلتك مع وازن.':'Start your WAZEN journey.')
               :(arabic?'سجل دخولك وكمل يومك.':'Sign in and continue your day.'),
-            style:const TextStyle(color:Colors.black54),
+            style:const TextStyle(color:WazenTheme.muted),
           ),
           const SizedBox(height:26),
           if(registerMode)...[
@@ -203,7 +199,11 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           if(error!=null)Padding(
             padding:const EdgeInsets.only(top:12),
-            child:Text(error!,style:const TextStyle(color:Colors.red)),
+            child:Container(
+              padding:const EdgeInsets.all(12),
+              decoration:BoxDecoration(color:const Color(0xFFFFECE8),borderRadius:BorderRadius.circular(14)),
+              child:Text(error!,style:const TextStyle(color:Color(0xFF9E352B))),
+            ),
           ),
           const SizedBox(height:20),
           FilledButton(
@@ -240,7 +240,7 @@ class _AuthScreenState extends State<AuthScreen> {
           Text(
             arabic?'WAZEN | وازن\nالمناسب لك، الآن.':'WAZEN\nRight for you, now.',
             textAlign:TextAlign.center,
-            style:const TextStyle(color:Colors.black45,height:1.5),
+            style:const TextStyle(color:WazenTheme.muted,height:1.5),
           ),
         ]),
       ),

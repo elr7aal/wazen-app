@@ -32,7 +32,7 @@ class RecommendationCard extends StatelessWidget {
               ])),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(color: WazenTheme.beige, borderRadius: BorderRadius.circular(14)),
+                decoration: BoxDecoration(color: WazenTheme.mint, borderRadius: BorderRadius.circular(14)),
                 child: Text('${item.wazenScore.toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w800, color: WazenTheme.greenDark)),
               ),
             ]),
@@ -56,11 +56,11 @@ class RecommendationCard extends StatelessWidget {
                 children:item.warnings.map((w)=>Container(
                   padding:const EdgeInsets.symmetric(horizontal:9,vertical:6),
                   decoration:BoxDecoration(
-                    color:const Color(0xFFFFF3E0),
+                    color:const Color(0xFFFFECE8),
                     borderRadius:BorderRadius.circular(10),
                   ),
                   child:Row(mainAxisSize:MainAxisSize.min,children:[
-                    const Icon(Icons.warning_amber_rounded,size:15,color:Colors.orange),
+                    const Icon(Icons.warning_amber_rounded,size:15,color:WazenTheme.coral),
                     const SizedBox(width:4),
                     Text(_translateWarning(w),style:const TextStyle(fontSize:11)),
                   ]),
@@ -83,8 +83,8 @@ class RecommendationCard extends StatelessWidget {
 
   Widget _chip(String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(color: const Color(0xFFF2F4F0), borderRadius: BorderRadius.circular(12)),
-        child: Text(text, style: const TextStyle(fontSize: 13)),
+        decoration: BoxDecoration(color: WazenTheme.mint, borderRadius: BorderRadius.circular(12)),
+        child: Text(text, style: const TextStyle(fontSize: 13,color:WazenTheme.greenDark,fontWeight:FontWeight.w600)),
       );
 
   String _translateReason(String value) {

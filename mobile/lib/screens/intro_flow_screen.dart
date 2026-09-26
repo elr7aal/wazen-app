@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/app_preferences.dart';
 import '../services/api_client.dart';
+import '../widgets/wazen_brand.dart';
 import 'auth_screen.dart';
 
 class IntroFlowScreen extends StatefulWidget {
@@ -97,17 +98,13 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
       child:SafeArea(child:Column(
         mainAxisAlignment:MainAxisAlignment.center,
         children:[
-          Container(
-            width:92,height:92,
-            decoration:BoxDecoration(color:WazenTheme.greenDark,borderRadius:BorderRadius.circular(28)),
-            child:const Icon(Icons.eco_rounded,color:Colors.white,size:52),
-          ),
+          const WazenBrandMark(size:96),
           const SizedBox(height:24),
-          const Text('WAZEN',style:TextStyle(fontSize:34,fontWeight:FontWeight.w900,letterSpacing:7,color:WazenTheme.greenDark)),
+          const Text('WAZEN',style:TextStyle(fontSize:29,fontWeight:FontWeight.w900,letterSpacing:7,color:WazenTheme.greenDark)),
           const SizedBox(height:4),
           const Text('وازن',style:TextStyle(fontSize:30,fontWeight:FontWeight.w900)),
           const SizedBox(height:12),
-          const Text('المناسب لك، الآن.',style:TextStyle(fontSize:18,color:Colors.black54)),
+          const Text('المناسب لك، الآن.',style:TextStyle(fontSize:18,color:WazenTheme.muted)),
         ],
       )),
     ),
@@ -118,11 +115,11 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
       padding:const EdgeInsets.all(24),
       child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         const Spacer(),
-        const Icon(Icons.language_rounded,size:60,color:WazenTheme.greenDark),
+        const WazenBrandMark(size:74),
         const SizedBox(height:24),
         const Text('اختر لغتك',textAlign:TextAlign.center,style:TextStyle(fontSize:30,fontWeight:FontWeight.w900)),
         const SizedBox(height:6),
-        const Text('You can change this later',textAlign:TextAlign.center,style:TextStyle(color:Colors.black54)),
+        const Text('You can change this later',textAlign:TextAlign.center,style:TextStyle(color:WazenTheme.muted)),
         const SizedBox(height:28),
         _languageTile('العربية','ar'),
         const SizedBox(height:12),
@@ -140,8 +137,8 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
       child:Container(
         padding:const EdgeInsets.symmetric(horizontal:18,vertical:18),
         decoration:BoxDecoration(
-          color:selected?WazenTheme.beige:Colors.white,
-          border:Border.all(color:selected?WazenTheme.green:const Color(0xFFDADFDA),width:selected?2:1),
+          color:selected?WazenTheme.mint:Colors.white,
+          border:Border.all(color:selected?WazenTheme.green:WazenTheme.border,width:selected?2:1),
           borderRadius:BorderRadius.circular(18),
         ),
         child:Row(children:[
@@ -159,8 +156,15 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
         const Spacer(),
         Container(
           height:220,
-          decoration:BoxDecoration(color:WazenTheme.beige,borderRadius:BorderRadius.circular(32)),
-          child:const Icon(Icons.ramen_dining_rounded,size:110,color:WazenTheme.greenDark),
+          decoration:BoxDecoration(
+            gradient:const LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[WazenTheme.greenDark,Color(0xFF23675B)]),
+            borderRadius:BorderRadius.circular(32),
+          ),
+          child:Stack(alignment:Alignment.center,children:[
+            Positioned(top:24,right:24,child:Container(width:52,height:52,decoration:const BoxDecoration(color:Color(0x33FFFFFF),shape:BoxShape.circle))),
+            const Icon(Icons.ramen_dining_rounded,size:106,color:Colors.white),
+            const Positioned(bottom:22,left:24,child:WazenBrandMark(size:46,light:true)),
+          ]),
         ),
         const SizedBox(height:28),
         Text(
@@ -172,7 +176,7 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
           arabic
             ?'وازن يساعدك تعرف ماذا تأكل وتشتري بناءً على هدفك، ذوقك، نشاطك وما هو متوفر حولك.'
             :'WAZEN helps you decide what to eat and buy based on your goal, taste, activity and what is available around you.',
-          style:const TextStyle(fontSize:16,color:Colors.black54,height:1.55),
+          style:const TextStyle(fontSize:16,color:WazenTheme.muted,height:1.55),
         ),
         const Spacer(),
         FilledButton(
@@ -197,7 +201,7 @@ class _IntroFlowScreenState extends State<IntroFlowScreen> {
       child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         Text(arabic?'أنشئ حسابك':'Create your account',style:const TextStyle(fontSize:30,fontWeight:FontWeight.w900)),
         const SizedBox(height:8),
-        Text(arabic?'اختر الطريقة المناسبة لك.':'Choose the method that works for you.',style:const TextStyle(color:Colors.black54)),
+        Text(arabic?'اختر الطريقة المناسبة لك.':'Choose the method that works for you.',style:const TextStyle(color:WazenTheme.muted)),
         const SizedBox(height:28),
         if(capabilitiesLoading)
           const Padding(

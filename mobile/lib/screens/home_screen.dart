@@ -3,6 +3,7 @@ import '../core/theme.dart';
 import '../models/api_models.dart';
 import '../services/api_client.dart';
 import '../widgets/wazen_ring.dart';
+import '../widgets/wazen_brand.dart';
 import 'craving_screen.dart';
 import 'auth_screen.dart';
 import 'food_log_screen.dart';
@@ -97,7 +98,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final firstName = user?['first_name']?.toString();
     return Scaffold(
       appBar: AppBar(
-        title: Text(firstName?.isNotEmpty == true ? 'هلا $firstName' : 'هلا'),
+        title: Row(children:[
+          const WazenBrandMark(size:38),
+          const SizedBox(width:10),
+          Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(firstName?.isNotEmpty == true ? 'هلا $firstName' : 'هلا',style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900)),
+            const Text('خلّنا نوازن يومك',style:TextStyle(fontSize:11,color:WazenTheme.muted,fontWeight:FontWeight.w500)),
+          ])),
+        ]),
         actions: [IconButton(onPressed: refresh, icon: const Icon(Icons.refresh_rounded)), IconButton(onPressed: () async {
           await WazenApi.instance.logout();
           if (context.mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthScreen()), (_) => false);
@@ -133,7 +141,13 @@ class _HomeScreenState extends State<HomeScreen> {
             if (loading) const LinearProgressIndicator(minHeight: 2),
             if (error != null) _error(error!),
             const SizedBox(height: 8),
-            Card(child: Padding(padding: const EdgeInsets.all(22), child: Column(children: [
+            Container(
+              decoration:BoxDecoration(
+                gradient:const LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[Colors.white,Color(0xFFE9F6F1)]),
+                borderRadius:BorderRadius.circular(26),
+                border:Border.all(color:WazenTheme.border),
+              ),
+              child: Padding(padding: const EdgeInsets.all(22), child: Column(children: [
               WazenRing(remaining: state?.remainingCalories ?? target, target: target),
               const SizedBox(height: 20),
               GridView.count(
@@ -153,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height:12),
               Container(
                 padding:const EdgeInsets.symmetric(horizontal:12,vertical:10),
-                decoration:BoxDecoration(color:const Color(0xFFF6F7F3),borderRadius:BorderRadius.circular(14)),
+                decoration:BoxDecoration(color:Colors.white.withValues(alpha:.82),borderRadius:BorderRadius.circular(16),border:Border.all(color:WazenTheme.border)),
                 child:Row(children:[
                   const Icon(Icons.directions_walk_rounded,color:WazenTheme.greenDark),
                   const SizedBox(width:8),
@@ -200,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 22),
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(color: WazenTheme.beige, borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(color: WazenTheme.sand.withValues(alpha:.48), borderRadius: BorderRadius.circular(20)),
               child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Icon(Icons.auto_awesome_rounded, color: WazenTheme.greenDark),
                 SizedBox(width: 12),
@@ -215,11 +229,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _metric(String title, String value, String foot) => Container(
     padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: const Color(0xFFF6F7F3), borderRadius: BorderRadius.circular(16)),
-    child: Column(children: [Text(title, style: const TextStyle(fontSize: 12, color: Colors.black54)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(foot, style: const TextStyle(fontSize: 11, color: Colors.black45))]),
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha:.78), borderRadius: BorderRadius.circular(16), border:Border.all(color:WazenTheme.border)),
+    child: Column(children: [Text(title, style: const TextStyle(fontSize: 12, color: WazenTheme.muted)), const SizedBox(height: 4), Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900,color:WazenTheme.greenDark)), Text(foot, style: const TextStyle(fontSize: 11, color: WazenTheme.muted))]),
   );
 
   Widget _quick(IconData icon, String title, String sub) => Card(child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [Icon(icon, color: WazenTheme.green), const SizedBox(width: 10), Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w700)), Text(sub, style: const TextStyle(fontSize: 11, color: Colors.black45))]))])));
 
-  Widget _error(String msg) => Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFFFFEEEE), borderRadius: BorderRadius.circular(14)), child: Text(msg, style: const TextStyle(color: Colors.red)));
+  Widget _error(String msg) => Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFFFFECE8), borderRadius: BorderRadius.circular(14)), child: Text(msg, style: const TextStyle(color: Color(0xFF9E352B))));
 }
