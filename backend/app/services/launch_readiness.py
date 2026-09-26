@@ -39,7 +39,9 @@ def production_launch_gate(config: RuntimeConfig, readiness: dict) -> dict:
 
     if not caps['email_verification']['available']:
         blocker('EMAIL_VERIFICATION_REQUIRED','authentication','Email verification delivery must be configured before production launch.')
-    else:
+    if not caps['email_verification'].get('enforced',False):
+        blocker('EMAIL_VERIFICATION_ENFORCEMENT_REQUIRED','authentication','Production must enforce verified email ownership before core application access.')
+    if caps['email_verification']['available']:
         verify_base=(os.getenv('WAZEN_EMAIL_VERIFY_URL_BASE') or '').strip()
         parsed_verify=urlparse(verify_base)
         if parsed_verify.scheme.lower()!='https' or not parsed_verify.netloc:
