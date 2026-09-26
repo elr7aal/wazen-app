@@ -1,6 +1,17 @@
 # WAZEN Alpha Readiness
 
-Updated: 2026-09-25
+Updated: 2026-09-26
+
+> Superseded readiness assessment: see `PRODUCT_PLAN_RECONCILIATION_AR.md`.
+> The PASS labels below are historical implementation/contract checks, not full
+> acceptance of every original backlog deliverable. In particular, unknown
+> nutrients in daily totals, complete English localization, native account-link
+> routing, live integrations and physical-device QA remain open. No production
+> or installable-iPhone readiness is claimed.
+
+Current tested backend/admin baseline: **201 backend tests + 4 admin UI tests**
+(commit `8c81745`; Docker readiness and PostgreSQL restore drill also green).
+The older counts below are retained as historical milestone evidence.
 
 ## Automated quality gate
 
@@ -105,3 +116,4 @@ These do not block local Alpha application logic, but they are not considered pr
 - v64: email ownership verification with one-time links, resend cooldown and production gate integration.
 
 Current verified engineering baseline: **179 backend tests passing**, Flutter validation passing, Docker migration/readiness smoke passing, PostgreSQL backup/restore drill passing.
+

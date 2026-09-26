@@ -1,38 +1,49 @@
-# تشغيل WAZEN على iPhone بدون Mac
+# تجهيز وازن للآيفون
 
-## المسار الأسرع الآن: PWA
-هذا المسار لا يحتاج Xcode ولا App Store ولا توقيع Apple.
+تحديث: 26 سبتمبر 2026.
 
-1. ارفع المستودع إلى GitHub.
-2. انشر الـBackend على Railway.
-3. أضف في GitHub Repository Variables:
-   - `WAZEN_API_BASE_URL` = رابط الـBackend وينتهي بـ `/api/v1`
-4. شغّل Workflow: **WAZEN Web PWA**
-5. افتح رابط GitHub Pages من Safari على الآيفون.
-6. Share → Add to Home Screen → Open as Web App → Add.
+## ما أصبح موجودًا
 
-## Native iOS بدون App Store
-GitHub Actions يستطيع بناء التطبيق على macOS runner، لكن iPhone لن يثبت IPA غير موقع.
+- `Validate WAZEN iOS`: يعمل عند تغيير مصادر الموبايل أو إعداد بناء iOS على `main`، ويمكن تشغيله يدويًا.
+- ينشئ مشروع iOS من Flutter داخل macOS runner، ويضيف أذونات الكاميرا والصور والميكروفون والتعرف على الكلام وKeychain، ثم يشغّل الاختبارات ويبني release غير موقّع.
+- يحفظ مشروع iOS الناتج وملف `.app` غير الموقع ونسخة اعتماديات Flutter كـGitHub Actions artifact لمدة سبعة أيام.
+- هذا مخرج تحقق هندسي **لا يمكن تثبيته على آيفون كما هو**.
 
-لـAd Hoc تحتاج:
-- عضوية Apple Developer Program.
-- Bundle ID، مثال: `ae.wazen.app`
-- Apple Distribution certificate.
-- UDID للآيفون مسجل في Apple Developer.
-- Ad Hoc provisioning profile يحتوي جهازك.
+## نسخة موقعة للأجهزة المسجلة
 
-أسرار GitHub المطلوبة:
-- `APPLE_TEAM_ID`
-- `IOS_CERTIFICATE_P12_BASE64`
-- `IOS_CERTIFICATE_PASSWORD`
-- `IOS_PROVISIONING_PROFILE_BASE64`
-- `IOS_PROFILE_NAME`
+تم إعداد `Build WAZEN iOS Ad Hoc` ليعمل يدويًا فقط. لم يُختبر مسار التوقيع الفعلي دون شهادات الحساب. يتحقق من مطابقة profile للفريق والتطبيق وصلاحيته ووجود أجهزة مسجلة، ويبني IPA ويحفظها دون نشر إلى المتجر أو الاستضافة.
 
-Repository Variables:
-- `WAZEN_BUNDLE_ID`
-- `WAZEN_API_BASE_URL`
+المتطلبات الخارجية:
 
-بعد ضبطها شغّل Workflow:
-**WAZEN iOS Ad Hoc IPA**
+1. حساب Apple Developer صالح للتوزيع، وهوية فريقه.
+2. Bundle ID مملوك للحساب؛ `ae.wazen.app` قيمة البناء غير الموقع فقط وليست إثبات ملكية.
+3. Apple Distribution certificate مع المفتاح الخاص في ملف P12 وكلمة مروره.
+4. Ad Hoc provisioning profile للتطبيق والفريق، يتضمن UDID للآيفون المقصود.
+5. عنوان backend تجريبي مؤكد يعمل عبر HTTPS، واختبار الحساب وروابط البريد.
 
-الـWorkflow ينتج ملف `.ipa` موقّعًا خاصًا بالأجهزة المسجلة في الـprovisioning profile.
+أدخل البيانات في **GitHub Settings → Secrets and variables → Actions**؛ لا تُرسل المفاتيح الخاصة أو كلمات المرور في المحادثة، ولا تضعها في الكود.
+
+| النوع | الاسم |
+| --- | --- |
+| Secret | `APPLE_TEAM_ID` |
+| Secret | `IOS_CERTIFICATE_P12_BASE64` |
+| Secret | `IOS_CERTIFICATE_PASSWORD` |
+| Secret | `IOS_PROVISIONING_PROFILE_BASE64` |
+| Variable | `WAZEN_BUNDLE_ID` |
+| Variable | `WAZEN_API_BASE_URL` |
+
+بعد استكمالها: Actions → Build WAZEN iOS Ad Hoc → Run workflow على `main`.
+الملف الناتج مخصص للأجهزة المدرجة في profile. تنزيل IPA من Safari وحده لا يثبت التطبيق؛ يلزم مسار تثبيت Ad Hoc مناسب أو الانتقال إلى TestFlight. TestFlight يحتاج إعداد App Store Connect ورفع البناء، ولم يُنفذ في هذه المرحلة.
+
+## فحوص قبل توزيع نسخة للمستخدم
+
+راجع `PRODUCT_PLAN_RECONCILIATION_AR.md`، خصوصًا مشكلة فقد حالة المغذيات المجهولة، وإكمال روابط التحقق واستعادة كلمة المرور على iOS. يجب اختبار هذه المتطلبات على جهاز فعلي قبل وصف النسخة بأنها جاهزة.
+
+النشر على Railway/GitHub Pages لم يُستأنف. تعليمات PWA القديمة كانت تشير إلى workflow غير موجود؛ workflow الويب الحالي يتحقق من البناء فقط.
+
+## المراجع التقنية
+
+- https://docs.flutter.dev/deployment/ios
+- https://docs.flutter.dev/platform-integration/ios/setup
+- https://pub.dev/packages/speech_to_text
+- https://pub.dev/packages/flutter_secure_storage/versions/9.2.4

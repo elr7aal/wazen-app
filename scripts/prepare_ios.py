@@ -5,11 +5,13 @@ import plistlib
 import re
 
 
-def prepare(root: Path, bundle_id: str, team_id: str = ''):
+def prepare(root: Path, bundle_id: str, team_id: str = '', profile_uuid: str = ''):
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)+', bundle_id):
         raise ValueError('A valid reverse-domain bundle identifier is required')
     if team_id and not re.fullmatch(r'[A-Z0-9]{10}', team_id):
         raise ValueError('Apple team ID must contain ten uppercase letters/digits')
+    if profile_uuid and not re.fullmatch(r'[A-Fa-f0-9-]{36}', profile_uuid):
+        raise ValueError('Invalid provisioning profile UUID')
     runner = root / 'ios/Runner'
     info_path = runner / 'Info.plist'
     with info_path.open('rb') as source:
@@ -27,6 +29,10 @@ def prepare(root: Path, bundle_id: str, team_id: str = ''):
         plistlib.dump({'keychain-access-groups': ['$(AppIdentifierPrefix)$(CFBundleIdentifier)']}, target)
     project_path = root / 'ios/Runner.xcodeproj/project.pbxproj'
     project = project_path.read_text()
+    if profile_uuid:
+        project = re.sub(r'CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;', project)
+    if team_id:
+        project = re.sub(r'DEVELOPMENT_TEAM = [^;]+;', '', project)
     def configure(match):
         original = match.group(1).strip('"')
         if original.endswith('.RunnerTests'):
@@ -34,6 +40,8 @@ def prepare(root: Path, bundle_id: str, team_id: str = ''):
         result = f'PRODUCT_BUNDLE_IDENTIFIER = {bundle_id};\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;'
         if team_id:
             result += f'\n\t\t\t\tDEVELOPMENT_TEAM = {team_id};'
+        if profile_uuid:
+            result += f'\n\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = {profile_uuid};\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";'
         return result
     # Generated projects are disposable build inputs; start from flutter create.
     project = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);', configure, project)
@@ -51,5 +59,6 @@ if __name__ == '__main__':
     parser.add_argument('--root', type=Path, default=Path('mobile'))
     parser.add_argument('--bundle-id', default='ae.wazen.app')
     parser.add_argument('--team-id', default='')
+    parser.add_argument('--profile-uuid', default='')
     args = parser.parse_args()
-    prepare(args.root, args.bundle_id, args.team_id)
+    prepare(args.root, args.bundle_id, args.team_id, args.profile_uuid)
