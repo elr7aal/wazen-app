@@ -640,4 +640,11 @@ class WazenApi {
     return Map<String,dynamic>.from(_unwrap(r));
   }
 
+
+  Future<bool> emailVerificationEnforced() async {
+    final data=await capabilities();
+    final verification=Map<String,dynamic>.from((data['email_verification'] as Map?)??const{});
+    return verification['enforced']==true;
+  }
+
 }
