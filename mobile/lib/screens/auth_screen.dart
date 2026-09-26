@@ -4,6 +4,7 @@ import '../services/api_client.dart';
 import '../services/app_preferences.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
+import 'verification_required_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -61,15 +62,20 @@ class _AuthScreenState extends State<AuthScreen> {
         await WazenApi.instance.login(email.text.trim(),password.text);
       }
       if(!mounted)return;
-      if(registerMode){
-        Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const OnboardingScreen()));
-      }else{
-        final complete=await WazenApi.instance.onboardingStatus();
-        if(!mounted)return;
-        Navigator.pushReplacement(context,MaterialPageRoute(
-          builder:(_)=>complete?const HomeScreen():const OnboardingScreen(),
-        ));
+      final enforced=await WazenApi.instance.emailVerificationEnforced();
+      if(enforced){
+        final account=await WazenApi.instance.me();
+        if(account['email_verified']!=true){
+          if(!mounted)return;
+          Navigator.pushReplacement(context,MaterialPageRoute(builder:(_)=>const VerificationRequiredScreen()));
+          return;
+        }
       }
+      final complete=await WazenApi.instance.onboardingStatus();
+      if(!mounted)return;
+      Navigator.pushReplacement(context,MaterialPageRoute(
+        builder:(_)=>complete?const HomeScreen():const OnboardingScreen(),
+      ));
     }catch(e){
       if(mounted)setState(()=>error=e.toString());
     }finally{
