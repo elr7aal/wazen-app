@@ -39,6 +39,7 @@ def _provider_env():
         'WAZEN_SMTP_FROM':'no-reply@wazen.example',
         'WAZEN_PASSWORD_RESET_URL_BASE':'https://app.wazen.example/reset-password',
         'WAZEN_EMAIL_VERIFY_URL_BASE':'https://app.wazen.example/verify-email',
+        'WAZEN_REQUIRE_EMAIL_VERIFIED':'true',
         'OPENAI_API_KEY':'test-openai-key',
     }
 
@@ -147,3 +148,12 @@ def test_launch_gate_requires_https_email_verification_url():
         data=production_launch_gate(_production_config(),_ready())
     codes={x['code'] for x in data['blockers']}
     assert 'HTTPS_VERIFY_URL_REQUIRED' in codes
+
+
+
+def test_launch_gate_requires_email_verification_enforcement():
+    env={**_provider_env(),'WAZEN_REQUIRE_EMAIL_VERIFIED':'false'}
+    with patch.dict(os.environ,env,clear=False):
+        data=production_launch_gate(_production_config(),_ready())
+    codes={x['code'] for x in data['blockers']}
+    assert 'EMAIL_VERIFICATION_ENFORCEMENT_REQUIRED' in codes
