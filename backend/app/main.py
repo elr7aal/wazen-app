@@ -22,7 +22,7 @@ from app.models.schemas import (
     DeleteAccountRequest, VerifyEmailRequest,
 )
 from app.security import hash_password, verify_password, create_access_token
-from app.deps import get_current_user
+from app.deps import get_current_user, get_authenticated_user
 from app.services.daily_state import calculate_daily_state
 from app.services.recommendation import recommend_now
 from app.services.make_it_fit import make_it_fit
@@ -270,7 +270,7 @@ def verify_email(req: VerifyEmailRequest, request: Request, db: Session = Depend
 @app.post('/api/v1/auth/resend-verification')
 def resend_verification(
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     if user.email_verified:
@@ -313,7 +313,7 @@ def refresh_auth(req: RefreshTokenRequest, request: Request, db: Session = Depen
 def logout_auth(
     req: LogoutRequest,
     request: Request,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     if req.all_sessions:
@@ -326,7 +326,7 @@ def logout_auth(
 
 @app.get('/api/v1/auth/sessions')
 def active_auth_sessions(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     items=list_active_sessions(db,user.id)
@@ -414,7 +414,7 @@ def reset_password(req: ResetPasswordRequest, request: Request, db: Session = De
 
 # -------- User/Profile --------
 @app.get('/api/v1/users/me')
-def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def me(user: User = Depends(get_authenticated_user), db: Session = Depends(get_db)):
     p = ensure_profile(db, user)
     return envelope({
         'id': user.id, 'email': user.email, 'email_verified': bool(user.email_verified), 'email_verified_at': user.email_verified_at.isoformat() if user.email_verified_at else None, 'first_name': user.first_name, 'language': user.language,
@@ -434,7 +434,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 
 @app.get('/api/v1/users/me/export')
 def export_me(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     return envelope(export_user_data(db,user))
@@ -443,7 +443,7 @@ def export_me(
 @app.delete('/api/v1/users/me')
 def delete_me(
     req: DeleteAccountRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_authenticated_user),
     db: Session = Depends(get_db),
 ):
     if not verify_password(req.password,user.password_hash):
