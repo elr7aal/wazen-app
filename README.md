@@ -499,3 +499,12 @@ Unified Add Food flow:
 - Client routing now distinguishes `/verify-email` from `/reset-password` links even though both use a `token` query parameter.
 - Production Launch Gate now requires configured HTTPS email-verification delivery.
 - Added Alembic revision `0006_email_verification`.
+
+
+## v56/v57 handoff reconciliation and audit hardening
+- Reconciled the v56 handoff against the newer `main` baseline; retained all later implementation work.
+- Completed missing audit acceptance tests for refresh, client-host privacy, reset throttling, single logout, request ID bounds, subject-only deletion and retention.
+- Escaped untrusted values in Security Events and Operations event rows to prevent stored HTML/script injection.
+- Added four admin regression tests to backend CI and enabled CI for admin changes.
+- Local validation: **201 backend tests and 4 admin tests passed**.
+- See `docs/SECURITY_OBSERVABILITY.md` for endpoints, retention settings, limitations and validation commands.

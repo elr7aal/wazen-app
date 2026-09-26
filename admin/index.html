@@ -130,6 +130,10 @@ pre{white-space:pre-wrap;direction:ltr;text-align:left;background:#0e1510;color:
 </main>
 <script>
 const $=id=>document.getElementById(id);
+// Audit values include caller-controlled request IDs. Render them as text.
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function saveSettings(){localStorage.setItem('wazen_api',$('api').value);localStorage.setItem('wazen_key',$('key').value);localStorage.setItem('wazen_actor',$('actor').value)}
 function restore(){ $('api').value=localStorage.getItem('wazen_api')||$('api').value;$('key').value=localStorage.getItem('wazen_key')||'';$('actor').value=localStorage.getItem('wazen_actor')||'admin'}
 function headers(){return {'Content-Type':'application/json','X-WAZEN-ADMIN-KEY':$('key').value,'X-WAZEN-ADMIN-ACTOR':$('actor').value}}
@@ -273,12 +277,12 @@ async function loadOperations(){
 
     const d=await api('/admin/operational-events?limit=100');
     $('opsEvents').innerHTML=(d.items||[]).map(x=>`<tr>
-      <td>${x.created_at||'—'}</td>
-      <td><span class="badge">${x.event_type||'—'}</span></td>
-      <td>${x.method||''} ${x.path||'—'}</td>
-      <td>${x.status_code??'—'}</td>
-      <td>${x.duration_ms==null?'—':x.duration_ms+' ms'}</td>
-      <td>${x.request_id||'—'}</td>
+      <td>${escapeHtml(x.created_at||'—')}</td>
+      <td><span class="badge">${escapeHtml(x.event_type||'—')}</span></td>
+      <td>${escapeHtml(x.method||'')} ${escapeHtml(x.path||'—')}</td>
+      <td>${escapeHtml(x.status_code??'—')}</td>
+      <td>${escapeHtml(x.duration_ms==null?'—':x.duration_ms+' ms')}</td>
+      <td>${escapeHtml(x.request_id||'—')}</td>
     </tr>`).join('')||'<tr><td colspan="6">لا توجد أحداث تشغيلية مسجلة.</td></tr>';
   }catch(e){
     $('opsStatus').textContent=e.message;
@@ -295,15 +299,15 @@ async function loadSecurityEvents(){
     p.set('limit','200');
     const d=await api('/admin/security-events?'+p.toString());
     $('securityEvents').innerHTML=(d.items||[]).map(x=>`<tr>
-      <td>${x.created_at||'—'}</td>
-      <td><span class="badge">${x.event_type||'—'}</span></td>
-      <td><span class="badge">${x.outcome||'—'}</span></td>
-      <td>${x.user_id||'—'}<div class="muted">${x.subject_hash?('subject '+x.subject_hash.slice(0,12)+'…'):''}</div></td>
-      <td>${x.request_id||'—'}<div class="muted">${x.client_hash?('client '+x.client_hash.slice(0,12)+'…'):''}</div></td>
-      <td><pre style="margin:0;max-width:360px">${JSON.stringify(x.details||{})}</pre></td>
+      <td>${escapeHtml(x.created_at||'—')}</td>
+      <td><span class="badge">${escapeHtml(x.event_type||'—')}</span></td>
+      <td><span class="badge">${escapeHtml(x.outcome||'—')}</span></td>
+      <td>${escapeHtml(x.user_id||'—')}<div class="muted">${escapeHtml(x.subject_hash?('subject '+x.subject_hash.slice(0,12)+'…'):'')}</div></td>
+      <td>${escapeHtml(x.request_id||'—')}<div class="muted">${escapeHtml(x.client_hash?('client '+x.client_hash.slice(0,12)+'…'):'')}</div></td>
+      <td><pre style="margin:0;max-width:360px">${escapeHtml(JSON.stringify(x.details||{}))}</pre></td>
     </tr>`).join('')||'<tr><td colspan="6">لا توجد أحداث مطابقة.</td></tr>';
   }catch(e){
-    $('securityEvents').innerHTML='<tr><td colspan="6">'+e.message+'</td></tr>';
+    $('securityEvents').innerHTML='<tr><td colspan="6">'+escapeHtml(e.message)+'</td></tr>';
   }
 }
 

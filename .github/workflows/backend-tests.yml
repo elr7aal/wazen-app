@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
+      - 'admin/**'
       - '.github/workflows/backend-tests.yml'
   workflow_dispatch:
 
@@ -30,6 +31,14 @@ jobs:
           WAZEN_SECRET: test-secret
           WAZEN_ADMIN_KEY: test-admin-key
         run: pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test audit console rendering
+        working-directory: .
+        run: node --test admin/audit-ui.test.cjs
 
   docker-smoke:
     needs: test
