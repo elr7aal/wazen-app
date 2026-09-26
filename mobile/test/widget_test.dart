@@ -11,7 +11,8 @@ void main() {
       )),
     ));
     expect(find.text('700'), findsOneWidget);
-    expect(find.text('سعرة متبقية'), findsOneWidget);
+    expect(find.text('متبقي اليوم'), findsOneWidget);
+    expect(find.text('سعرة'), findsOneWidget);
     final ring = tester.widget<CircularProgressIndicator>(find.byType(CircularProgressIndicator));
     expect(ring.value, closeTo(0.65, 0.001));
     expect(tester.takeException(), isNull);
