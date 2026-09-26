@@ -642,9 +642,17 @@ class WazenApi {
 
 
   Future<bool> emailVerificationEnforced() async {
-    final data=await capabilities();
-    final verification=Map<String,dynamic>.from((data['email_verification'] as Map?)??const{});
-    return verification['enforced']==true;
+    try {
+      final data=await capabilities();
+      final verification=Map<String,dynamic>.from((data['email_verification'] as Map?)??const{});
+      return verification['enforced']==true;
+    } on ApiException catch (error) {
+      // The personal-trial API predates the capabilities endpoint. A missing
+      // endpoint means verification is unavailable there; other failures must
+      // still surface instead of silently weakening the check.
+      if (error.statusCode == 404) return false;
+      rethrow;
+    }
   }
 
 }
