@@ -1,6 +1,7 @@
 from app.config import RuntimeConfig, safe_runtime_summary
 from app.services.email_delivery import password_reset_delivery_available, email_verification_delivery_available
 from app.services.vision import provider_configured as vision_provider_configured
+from app.deps import email_verification_enforced
 
 
 def integration_capabilities(config: RuntimeConfig) -> dict:
@@ -31,6 +32,7 @@ def integration_capabilities(config: RuntimeConfig) -> dict:
             'implemented': True,
             'available': email_verification_delivery_available(),
             'status': 'AVAILABLE' if email_verification_delivery_available() else 'NOT_CONFIGURED',
+            'enforced': email_verification_enforced(),
         },
         'password_reset_email': {
             'implemented': True,
