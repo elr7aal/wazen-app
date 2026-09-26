@@ -1,0 +1,510 @@
+# WAZEN | وازن — Alpha Backend Starter
+
+WAZEN is a personalized food decision platform. This repository now contains the first working backend for the Golden Flow:
+
+`Daily State -> Craving -> Recommendation -> Make It Fit -> Rebalance`
+
+## Backend quick start
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Open: `http://127.0.0.1:8000/docs`
+
+## Run tests
+
+```bash
+cd backend
+pytest -q
+```
+
+## Current seed
+
+The recommendation service currently ships with a verified UAE KFC seed subset used for the Golden Flow. It includes nutrition, allergens, and a small set of verified modifier deltas.
+
+## Important product rules
+
+- Severe allergens are hard exclusions before ranking.
+- A requested restaurant is preserved as user intent.
+- The user can choose an over-target meal; WAZEN rebalances rather than blocking or shaming.
+- `Make It Fit` only applies a modifier when the caller confirms that component is part of the meal.
+- Missing nutrition data is not interpreted as zero or "healthy".
+
+## v0.3 persistence milestone
+The backend now supports persisted users, nutrition profiles and food logs using SQLAlchemy.
+
+### New authenticated endpoints
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `GET/PATCH /api/v1/users/me`
+- `POST /api/v1/food-log`
+- `GET /api/v1/food-log/today`
+- `DELETE /api/v1/food-log/{log_id}`
+- `GET /api/v1/nutrition/today`
+- `POST /api/v1/recommendations/for-me`
+
+`DATABASE_URL` defaults to SQLite for local/test convenience. Set the provided PostgreSQL URL in `.env` for deployment.
+
+## v0.4 — Unified Database Catalog
+
+The alpha backend now seeds the food catalog into the configured SQL database from `backend/app/data/catalog_seed_v5.json` on first boot.
+
+Current seed coverage:
+- 70 restaurant food records (McDonald's UAE + KFC UAE)
+- 15 UAE grocery records
+- 5 verified KFC modifiers imported (sample modifiers are intentionally skipped)
+
+New database-backed endpoints:
+- `GET /api/v1/foods/search`
+- `GET /api/v1/foods/{food_id}`
+- `GET /api/v1/foods/barcode/{barcode}`
+- `POST /api/v1/recommendations/now` now queries SQL instead of `kfc_uae.json`
+- `POST /api/v1/recommendations/for-me` uses persisted user/day data plus the SQL catalog
+- `POST /api/v1/recommendations/make-it-fit` loads food + modifiers from SQL
+
+Data provenance is stored in `food_data_sources`, and hard-allergy filtering only treats explicit `CONTAINS` relationships as hard exclusions. Cross-contact warnings remain warnings instead of silently excluding foods.
+
+### Run tests
+
+```bash
+cd backend
+PYTHONPATH=. DATABASE_URL=sqlite+pysqlite:///./test.db pytest -q
+```
+
+Expected current result: **14 passed**.
+
+
+## v5 Golden Flow endpoints
+- `POST /api/v1/food-log/from-catalog`
+- `POST /api/v1/golden-flow`
+
+The catalog item can now be logged by `food_id`; nutrition is copied from the verified catalog and the user's daily state is recalculated automatically.
+
+## v6 — Mobile Alpha
+A Flutter Arabic-first mobile client has been added under `mobile/` and wired to the live FastAPI Golden Flow:
+Auth → Home → craving input → recommendations → food detail → Add to Today → refreshed daily state.
+
+## v7 Make It Fit
+- Interactive mobile Make It Fit screen.
+- Verified component-level choices only.
+- GET `/api/v1/foods/{food_id}/make-it-fit-options`
+- POST `/api/v1/food-log/from-modified-catalog`
+- Modified nutrition snapshot is saved to the Food Log.
+
+## v8 Rebalance
+- Personalized post-meal Rebalance screen.
+- GET `/api/v1/rebalance/for-me`
+- Recalculates remaining calories/macros/protein from persisted Food Log.
+- Returns up to 5 next food options from the unified catalog.
+- Mobile routes to Rebalance after normal or modified meal logging.
+
+## v9 Food Log
+- Full Today/Food Log screen grouped into breakfast, lunch, dinner and snacks.
+- Edit meal type/calories/protein from the app.
+- Delete entries and immediately recalculate Daily State.
+- Bottom navigation connects Home, Today and Discover.
+- PATCH `/api/v1/food-log/{log_id}` added with user ownership protection.
+
+## v10 Add Food
+Unified Add Food flow:
+- Catalog search
+- Natural-language text matching with mandatory review
+- Camera photo intake with an explicit Vision-provider adapter contract; this build never fabricates image analysis when no provider is configured
+- Camera barcode scan and catalog lookup
+- Common review screen with quantity and meal selection before logging
+- All confirmed inputs converge on the same persisted Food Log
+
+- Arabic-English food aliases are supported for common MVP terms such as زينجر → Zinger and برغر → Burger.
+
+## v11 Vision + Voice
+- Real image analysis uses the OpenAI Responses API when `OPENAI_API_KEY` is configured.
+- Image inputs are sent as Base64 data URLs and remain `AI Estimate` until user review.
+- Voice input uses `speech_to_text` on device with Arabic UAE locale, then feeds recognized text through the same text-parser review flow.
+- No image or voice result is automatically logged.
+
+## v12 Onboarding
+- Four-step Arabic-first onboarding: body basics, goal/activity/budget, severe allergies, preferences/dislikes.
+- Generic starting targets are calculated with Mifflin-St Jeor + activity factor and goal adjustment.
+- Protein/fat/carbohydrate targets are derived and persisted.
+- Severe allergies are stored as hard exclusions; preferences/dislikes are separate ranking signals.
+- New and returning incomplete accounts are routed to onboarding before Home.
+- Calculated targets are a general-wellness starting estimate and remain editable.
+
+## v13 Preference Learning
+- Preference score uses onboarding likes/dislikes with food-term aliases (e.g. CHICKEN also matches Zinger/Twister/Nuggets).
+- Repeated logged foods create a small passive positive affinity.
+- Explicit SAVE/ACCEPT/ORDER feedback increases affinity; REJECT decreases it.
+- Preference learning is capped and never overrides severe-allergy hard exclusions or health rules.
+- Mobile recommendation cards include Save and Not-for-me controls.
+
+## v14 Profile & Plan
+- Full Arabic Account & Plan screen.
+- Edit weight, target weight, goal, activity, budget, allergies, likes/dislikes and daily macro targets.
+- Recalculate generic targets from current body/profile data on demand.
+- "Why WAZEN recommends this" insight panel explains safety exclusions, stated preferences, repeated choices and rejection signals.
+- Bottom navigation now includes Account.
+
+## v15 iOS Cloud Build + PWA
+- GitHub Pages PWA workflow for iPhone Home Screen installation without App Store.
+- macOS GitHub Actions validation build for iOS without signing.
+- Ad Hoc IPA workflow prepared for Apple Developer signing and registered devices.
+- Backend Dockerfile + Railway configuration added.
+- `API_BASE_URL` is configurable at build time.
+- CORS support added for hosted PWA.
+- See `docs/IOS_NO_MAC_SETUP_AR.md`.
+
+
+## v16 — Admin & Data Operations
+- Admin food review queue with APPROVE / REJECT / FLAG.
+- Admin audit history for review and import actions.
+- JSON and CSV food import with dry-run mode.
+- Validation for required IDs/names, invalid or negative numeric values, duplicate IDs/barcodes and existing barcode conflicts.
+- Lightweight `admin/index.html` review/import console.
+- Admin endpoints protected by `WAZEN_ADMIN_KEY`.
+- Backend CI established; v16 baseline: 49 passing tests.
+
+## v17 — Weekly Plan + Progress
+- Persisted 7-day meal plan with breakfast, lunch, dinner and snack.
+- Meal allocation uses the user's calorie target and excludes explicit severe allergens before planning.
+- Per-day rebalance and full-week regeneration.
+- Progress summaries for 7 / 30 / 90 days.
+- Goal-day tracking, average calories/protein, restaurant spend from logged catalog items and persisted weight history.
+- New Arabic-first mobile “خطتي” tab with weekly plan and progress views.
+- Bottom navigation expanded to: الرئيسية / يومي / اكتشف / خطتي / حسابي.
+- Backend v17 baseline: **52 passing tests**.
+
+## v18 — First-run Experience
+- First-launch splash, language selection, welcome screen and account-method screen.
+- Arabic / English preference is persisted and updates app locale + text direction.
+- Email sign-in/register UI cleaned for real use; Alpha demo credentials removed.
+- API URL moved behind advanced connection settings.
+- Apple, Google and mobile-number sign-in appear only as clearly unavailable placeholders until a secure provider is connected; they do not simulate authentication.
+
+
+## v19 — Secure Sessions
+- Access + refresh token sessions.
+- Refresh token rotation; reused refresh tokens are rejected.
+- Logout revokes the active refresh session; all-session revocation is supported.
+- Password reset tokens are single-use, expiring and revoke old sessions after a successful reset.
+- Password-reset responses do not reveal whether an email exists.
+- Mobile stores refresh tokens and restores an expired session automatically.
+- Password recovery UI clearly reports when email delivery is not yet configured.
+- Backend v19 baseline: **56 passing tests**.
+
+## v20 — Goal History
+- Goal/profile snapshots are retained on onboarding, meaningful profile updates and plan recalculation.
+- Duplicate snapshots are skipped.
+- New `GET /api/v1/profile/history` endpoint.
+- Account screen shows recent plan/goal history including weight, target weight and calorie target.
+
+## v21 — Preference Levels
+- Explicit preferences support: `LOVE / LIKE / NEUTRAL / DISLIKE / NEVER_SHOW`.
+- Preferences can target a food term/category or a specific food item.
+- `NEVER_SHOW` is applied before ranking as an explicit user exclusion.
+- LOVE/LIKE/DISLIKE adjust preference scoring but never override severe-allergy exclusions.
+- Account UI supports five-level preference controls and synchronizes legacy like/dislike signals.
+- Backend v21 baseline: **62 passing tests**.
+
+## v22 — Health & Safety Limits
+- Explicit user/clinician nutrition limits with MAX/MIN and SOFT/HARD behavior.
+- HARD limits are applied before ranking and also respected by weekly plans.
+- Missing nutrition required by a HARD limit is treated as unknown/unsafe for that rule, never as zero.
+- Mobile Health Limits management screen linked from Account/Safety.
+- Backend v22 baseline: **66 passing tests**.
+
+## v23 — Food Catalog Search
+- Arabic/English synonym search, including برغر / برجر / burger families.
+- Filters for vendor, brand, category, food type, calories, protein, sodium, fiber and price.
+- Mobile search supports All / Restaurants / Grocery plus nutrition and price filters.
+
+## v24 — Food Log Favorites
+- Duplicate any logged meal.
+- Save a log as a reusable favorite.
+- Re-log favorites with one tap.
+- Daily totals recalculate immediately after these operations.
+
+## v25 — Structured Natural-language Logging
+- Arabic/English multi-item text parsing.
+- Conservative portion and unit estimates.
+- Per-item candidate lists and confidence.
+- preview_required=true and auto_saved=false by contract; text parsing never saves without user confirmation.
+
+## v26 — Image Review Contract
+- Image analysis remains review-only.
+- AI-estimated food/portion data is never auto-saved.
+- Low/unknown confidence remains visible to the user.
+
+## v27 — Daily Nutrition + Activity
+- Fiber target/consumption/remaining added to the daily engine.
+- Manual Activity Credit support with persisted activity logs.
+- Fiber is preserved across modified meals, favorites and goal history.
+
+## v28 — Structured Craving Parser
+- Arabic/English parsing for restaurant, category, calorie, protein and budget constraints.
+- Currency context is required before numbers are interpreted as budget.
+- Parsed constraints are shown to the user before recommendation results.
+
+## v29 — Candidate Filtering Audit
+- Severe allergy, explicit NEVER_SHOW, hard health limits, unavailable foods and insufficient nutrition are filtered before ranking.
+- Exclusion reasons are persisted with request context.
+- Added GET /api/v1/recommendations/exclusions.
+- Fixed recommendation argument mapping so budget cannot be misread as a protein constraint.
+
+## v30 — Ranking Engine v1 Audit
+- Ranked recommendation decisions are persisted with rank, component scores, reasons, warnings and request context.
+- Added GET /api/v1/recommendations/decisions.
+- Ranking tests enforce 0–100 score bounds, stable decision priority and preservation of an explicitly requested vendor.
+
+## v31 — Make It Fit Hardening
+- Duplicate modifier components are de-duplicated before nutrition math.
+- Core requested food is explicitly preserved.
+- Before/after nutrition and nutrition delta are returned.
+- Only verified, explicitly selected components are applied.
+
+## v32 — Rebalance Day Hardening
+- User choice is explicitly preserved after logging, including when the day goes over the current calorie target.
+- Post-overage recommendations use a lighter follow-up ceiling rather than blocking the chosen meal.
+- Neutral Arabic copy avoids guilt/shaming language.
+
+## v33 — Recommendation Card Completeness
+- Recommendation cards show price when known.
+- Health/safety/budget warnings are visible instead of hidden.
+- Source confidence remains visible on every card.
+
+## v34 — Food Detail Provenance
+- Food detail now includes source name, confidence, reference and last verification date.
+- Missing nutrition values remain visibly unavailable (—) and are never presented as low/zero.
+
+## v35 — Admin Data Review Completion
+- Admin can edit catalog/nutrition/allergen data with full before/after audit snapshots.
+- Duplicate foods can be merged into a canonical record while preserving the source as MERGED.
+- Food-log, favorites, weekly-plan and recommendation references are remapped during merge.
+- Admin UI now exposes Edit and Merge actions in addition to review/import.
+
+## v36 — Official Alpha QA Gate
+- Added automated QA-001 through QA-010 from the engineering acceptance checklist.
+- Daily math, edit/delete, allergy filtering, craving parsing, Make It Fit, user override, missing sodium and source provenance are all enforced in CI.
+
+## v37 — Explicit Condition Context
+- Optional condition context is stored separately from nutrition limits.
+- Condition context alone never changes recommendations or creates medical limits.
+- Any effective nutrition restriction still requires an explicit Health Limit.
+
+## v38 — Session Security
+- Active authentication sessions can be listed.
+- Account UI shows active-session count.
+- “Logout all devices” revokes every active refresh session.
+
+## v39 — Database Migration Safety
+- Added Alembic migration framework.
+- Idempotent current-schema baseline supports fresh and older Alpha databases.
+- Known additive Alpha columns are reconciled safely.
+- Migration baseline is covered by automated tests.
+
+## v40 — Auth Acceptance Hardening
+- Registration and password reset enforce 8+ characters with uppercase, lowercase and numeric characters.
+- Expired access tokens are explicitly tested and rejected.
+
+## v41 — Production Configuration Guardrails
+- Production startup rejects default/short JWT secrets, wildcard CORS and SQLite.
+- Runtime health output exposes only safe environment/database-mode metadata.
+
+## v42 — Secure Mobile Token Storage
+- Access and refresh tokens moved out of SharedPreferences into secure storage.
+- Existing pre-v42 tokens are migrated once and deleted from legacy preferences.
+
+## v43 — Automatic Session Refresh
+- Authenticated mobile requests retry once after a single-flight refresh.
+- Concurrent 401s do not rotate the same refresh token multiple times.
+- Transient network failure during refresh does not erase the local session.
+
+## v44 — Recommendation Contract Alignment
+- Direct /recommendations/for-me requests now support min_protein_g consistently with Golden Flow.
+- Decision audit retains the protein constraint in request context.
+
+## v45 — Password UX Alignment
+- Registration screen explains the backend password policy and validates it before submission.
+
+## v46 — Migration-first Container Startup
+- Backend Docker startup runs alembic upgrade head before Uvicorn.
+- CI builds the Docker image and smoke-tests the migrated container.
+
+## v47 — Operational Readiness
+- Added /api/v1/readiness for database/catalog/migration checks.
+- Every HTTP response gets an X-Request-ID for request tracing.
+- Docker smoke test now validates readiness rather than liveness only.
+- Current backend baseline: **122 passing tests**.
+- Latest Flutter web validation: **passing**.
+
+
+## v48 — Idempotent Mobile Writes
+- Added persisted Idempotency-Key support for retry-sensitive food-log writes.
+- Same key + same payload replays the original response without creating a duplicate log.
+- Same key + different payload returns HTTP 409.
+- Covered manual food logging, catalog logging, modified-catalog logging, duplicate meal logging and favorite re-logging.
+- Flutter generates one idempotency key per user action and preserves it across automatic auth-refresh retries.
+- Added Alembic revision `0002_idempotency` and migration-head coverage.
+
+
+## v49 — Retry Resilience Completion
+- Golden Flow accepts Idempotency-Key so an auth/network retry cannot duplicate an optional auto-logged meal or duplicate the same audited decision response.
+- Manual activity credit logging is idempotent and cannot double-count calories after a retry.
+- Flutter preserves the same per-action key through automatic token refresh/retry for both flows.
+- Backend v49 baseline: **130 passing tests**.
+
+
+## v50 — Mutation Safety
+- Idempotency extended to recommendation feedback, favorite creation, weekly-plan generation and day rebalance.
+- Repeated retries replay the original mutation response instead of creating duplicate behavioral signals or regenerating plan rows.
+- Flutter preserves one per-action idempotency key through auth refresh/retry.
+- Backend v50 baseline: **134 passing tests**.
+- Flutter validation: passing.
+
+## v51 — Idempotency Recovery
+- Stale PENDING idempotency claims can be safely recovered after a configurable timeout.
+- Reusing a stale key with a different payload still returns a conflict.
+- Old COMPLETED records are cleaned after a configurable retention window.
+- Fresh in-progress requests remain protected from parallel duplicate execution.
+- Backend v51 baseline: **139 passing tests**.
+
+
+## v52 — Privacy & Data Controls
+- Authenticated user-data export covering profile, food logs, goals, preferences, health limits, favorites, activity and recommendation history.
+- Security credentials and token/hash material are intentionally excluded from exports.
+- Permanent account deletion requires the current password plus an explicit confirmation contract.
+- Deletion purges all user-linked rows, sessions and idempotency records rather than merely disabling the account.
+- After deletion, existing access tokens, refresh tokens and password login all stop working.
+- Mobile Account → Privacy & Data screen supports copying a JSON export and a guarded permanent-delete flow.
+- Backend v52 baseline: **142 passing tests**.
+- Flutter validation and web build: **passing**.
+
+
+## v53 — Data Quality & Freshness
+- Food sources are classified as FRESH, AGING, STALE or UNKNOWN from the last verification date.
+- Food detail and recommendation payloads expose source freshness and source age in days.
+- Recommendation cards and food detail surface stale/unknown verification warnings to the user.
+- Admin Data Quality report identifies stale/undated/missing sources and missing core nutrition/sodium.
+- Admin UI includes a live data-quality dashboard.
+- Backend v53 baseline: **146 passing tests**.
+- Flutter validation and web build: **passing**.
+
+
+## v54 — Source-aware Ranking
+- Source quality is a bounded 5% recommendation signal based on confidence + verification freshness.
+- FRESH/VERIFIED items get a small tie-breaking advantage over otherwise comparable stale/unknown-source items.
+- Source quality cannot override severe-allergy, NEVER_SHOW or HARD health-limit exclusions.
+- Recommendation decision priority remains ELIGIBLE → NEAR_MATCH → MAKE_IT_FIT → OVER_TARGET before WAZEN score ordering.
+- Recommendation audit scores now include `source_quality`.
+- Backend v54 baseline: **148 passing tests**.
+- Docker migration/readiness smoke: **passing**.
+
+
+## v55 — Authentication Abuse Protection
+- Persistent database-backed throttling for login and password-recovery abuse.
+- Account/email and wider shared-network limits are evaluated separately.
+- Subjects are stored only as HMAC hashes; raw email/IP values are not persisted in the throttle table.
+- Login throttling returns HTTP 429 with Retry-After and successful authentication clears the email failure counter.
+- Password recovery is throttled identically for existing and non-existing accounts to avoid account enumeration.
+- Email throttle hashes are cleared during permanent account deletion.
+- Added Alembic revision `0003_auth_rate_limits`.
+- Backend v55 baseline: **152 passing tests**.
+- Docker migration/readiness smoke: **passing**.
+
+
+## v56 — Security Event Audit
+- Privacy-preserving security event ledger with HMAC-hashed email/IP subjects; raw email addresses and IPs are never persisted in security events.
+- Authentication audit covers login success/failure, login throttling, token refresh success/failure, logout/logout-all, password-reset requests, reset success/failure and reset throttling.
+- Security events carry bounded request IDs for cross-request tracing without storing request bodies or credentials.
+- Admin API supports filtering by event type/outcome, and the Admin console includes a Security Events viewer.
+- Permanent account deletion removes both user-linked security events and hashed email-subject events.
+- Added Alembic revision `0004_security_events` and migration-head coverage.
+- Backend v56 baseline: **159 passing tests**.
+
+
+## v57 — Production Observability
+- Operational event ledger records only HTTP 5xx and slow requests; request bodies, authorization headers and user payloads are never stored.
+- Request tracing links operational events to bounded X-Request-ID values.
+- Admin Operations summary combines readiness, recent 5xx, slow requests, security blocks, active auth throttles and idempotency health.
+- Alert states surface readiness failures, 5xx spikes, slow-request spikes, excessive auth blocks and stale idempotency claims.
+- Admin console includes an Operations dashboard plus recent operational events.
+- Operational events have configurable retention and a dedicated Alembic revision `0005_operational_events`.
+- Backend v57 baseline: **164 passing tests**.
+- Docker migration/readiness smoke: **passing**.
+
+
+## v58 — PostgreSQL Backup & Restore Drill
+- CI now starts a real PostgreSQL 17 instance and runs WAZEN migrations + catalog seed against it.
+- The drill creates a custom-format `pg_dump`, restores it into a clean database and verifies food-row counts plus Alembic revision parity.
+- A second WAZEN container starts against the restored database and must pass `/api/v1/readiness`.
+- Added `docs/POSTGRES_BACKUP_RESTORE.md` with a production/staging backup and restore runbook.
+- This validates application/schema recovery mechanics; managed-provider backup retention and a restore drill against the actual production PostgreSQL service remain deployment responsibilities.
+- PostgreSQL backup/restore CI drill: **passing**.
+
+
+## v59 — Password Reset Email Delivery
+- SMTP password-reset delivery adapter with TLS/SSL support and no secrets committed to source.
+- Public forgot-password responses are account-enumeration safe: existing and non-existing accounts receive the same public acceptance contract.
+- Delivery availability reflects only global environment configuration, never whether an email address exists.
+- Provider delivery status is retained only in restricted security audit events.
+- Debug reset tokens are disabled in production even if the debug flag is accidentally set.
+- Added `docs/PASSWORD_RESET_EMAIL.md`.
+- Backend v59 baseline: **169 passing tests**.
+- Docker migration/readiness smoke and PostgreSQL backup/restore drill: **passing**.
+- Flutter tests and web validation: **passing**.
+
+## v60 — Integration Capabilities
+- Added a safe public `GET /api/v1/capabilities` contract describing implemented/available integrations without exposing credentials.
+- Email/password authentication is explicitly available; Apple, Google and mobile OTP remain explicitly NOT_IMPLEMENTED until real secure flows exist.
+- Password-reset email and Vision availability reflect their actual environment configuration.
+- Added restricted `GET /api/v1/admin/integrations` with concrete remaining integration actions.
+- First-run mobile UI reads the capability contract and keeps unavailable external sign-in providers disabled rather than implying they work.
+- Admin console includes an Integration Readiness section.
+- Backend v60 baseline: **173 passing tests**.
+- Docker migration/readiness smoke and PostgreSQL backup/restore drill: **passing**.
+
+
+## v61 — Production Launch Gate
+- Added restricted `GET /api/v1/admin/launch-readiness` with a single machine-readable READY / NOT_READY production decision.
+- Launch blockers cover production environment mode, readiness, PostgreSQL, explicit CORS, strong JWT/admin secrets and configured HTTPS password-reset delivery.
+- Vision and unimplemented Apple/Google/mobile-OTP authentication are surfaced as warnings rather than hidden or falsely represented as available.
+- Manual launch checks cover managed-provider backups, real reset-email delivery, final domain/TLS/CORS verification and native iOS signing.
+- Admin console includes a Production Launch Gate dashboard.
+- Added `docs/PRODUCTION_LAUNCH_CHECKLIST.md`.
+- Backend v61 baseline: **179 passing tests**.
+
+
+## v62 — Capability-aware Image Logging
+- Camera/image analysis UI now reflects the real Vision capability contract.
+- Image analysis stays disabled when no provider is configured instead of implying that it works.
+- Review-only behavior remains mandatory when Vision is available.
+
+## v63 — Password Reset Completion Routing
+- Added a dedicated Flutter password-reset completion screen.
+- Reset tokens from emailed links route into the client instead of stopping at the API contract.
+- Successful password reset clears the local session and returns the user to sign-in.
+- Reset-link client routing is documented for production configuration.
+
+## v64 — Email Verification
+- New accounts track explicit email ownership state.
+- Time-limited one-time verification tokens are stored only as hashes.
+- SMTP verification links use a dedicated `WAZEN_EMAIL_VERIFY_URL_BASE`.
+- Existing pre-v64 accounts are grandfathered as verified during migration.
+- Authenticated resend uses a cooldown and replaces older pending verification links.
+- Account UI exposes verified/unverified state and resend action.
+- Client routing now distinguishes `/verify-email` from `/reset-password` links even though both use a `token` query parameter.
+- Production Launch Gate now requires configured HTTPS email-verification delivery.
+- Added Alembic revision `0006_email_verification`.
+
+
+## v56/v57 handoff reconciliation and audit hardening
+- Reconciled the v56 handoff against the newer `main` baseline; retained all later implementation work.
+- Completed missing audit acceptance tests for refresh, client-host privacy, reset throttling, single logout, request ID bounds, subject-only deletion and retention.
+- Escaped untrusted values in Security Events and Operations event rows to prevent stored HTML/script injection.
+- Added four admin regression tests to backend CI and enabled CI for admin changes.
+- Local validation: **201 backend tests and 4 admin tests passed**.
+- See `docs/SECURITY_OBSERVABILITY.md` for endpoints, retention settings, limitations and validation commands.
